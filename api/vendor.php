@@ -270,6 +270,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_all_orders') {
     echo json_encode(['success' => true, 'count' => count($allOrders), 'orders' => $allOrders], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+$scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+if (substr($scriptDir, -4) === '/api' || substr($scriptDir, -4) === '\\api') {
+    $basePath = substr($scriptDir, 0, -4);
+} else {
+    $basePath = $scriptDir;
+}
+$basePath = rtrim(str_replace('\\', '/', $basePath), '/');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -277,6 +285,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_all_orders') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mama Momo - Vendor Terminal</title>
+  <!-- Favicon & Touch Icons -->
+  <link rel="icon" type="image/svg+xml" href="<?= ($basePath ?: '') ?>/favicon.svg">
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="<?= ($basePath ?: '') ?>/favicon-32x32.png">
+  <link rel="alternate icon" type="image/png" sizes="16x16" href="<?= ($basePath ?: '') ?>/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="<?= ($basePath ?: '') ?>/apple-touch-icon.png">
+  <link rel="shortcut icon" href="<?= ($basePath ?: '') ?>/favicon.ico">
+  <meta name="theme-color" content="#ef4444">
   <style>
     * {
       box-sizing: border-box;

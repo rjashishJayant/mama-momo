@@ -6,6 +6,10 @@
   },
   "routes": [
     {
+      "src": "^/(favicon.*|apple-touch-icon.*)$",
+      "dest": "/$1"
+    },
+    {
       "src": "^/$",
       "dest": "/api/index.php"
     },

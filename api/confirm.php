@@ -223,6 +223,13 @@ if ($errorMsg !== null):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error - Mama Momo</title>
+  <!-- Favicon & Touch Icons -->
+  <link rel="icon" type="image/svg+xml" href="<?= ($basePath ?: '') ?>/favicon.svg">
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="<?= ($basePath ?: '') ?>/favicon-32x32.png">
+  <link rel="alternate icon" type="image/png" sizes="16x16" href="<?= ($basePath ?: '') ?>/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="<?= ($basePath ?: '') ?>/apple-touch-icon.png">
+  <link rel="shortcut icon" href="<?= ($basePath ?: '') ?>/favicon.ico">
+  <meta name="theme-color" content="#ef4444">
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fff5f2; padding: 20px; }
     .box { max-width: 440px; margin: 8vh auto; background: #fff; padding: 28px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); text-align: center; }
@@ -283,6 +290,13 @@ if (!empty($result['status']) && ($result['status'] === 'APPROVED' || $result['s
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Order Pass - <?= $orderId ?></title>
+  <!-- Favicon & Touch Icons -->
+  <link rel="icon" type="image/svg+xml" href="<?= ($basePath ?: '') ?>/favicon.svg">
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="<?= ($basePath ?: '') ?>/favicon-32x32.png">
+  <link rel="alternate icon" type="image/png" sizes="16x16" href="<?= ($basePath ?: '') ?>/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="<?= ($basePath ?: '') ?>/apple-touch-icon.png">
+  <link rel="shortcut icon" href="<?= ($basePath ?: '') ?>/favicon.ico">
+  <meta name="theme-color" content="#ef4444">
   <style>
     * {
       box-sizing: border-box;

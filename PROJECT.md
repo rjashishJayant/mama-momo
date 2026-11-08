@@ -29,6 +29,9 @@ The codebase strictly isolates customer-facing API routes while masking internal
 mama-momo/
 ├── .htaccess             # Apache mod_rewrite & DirectoryIndex for WAMP/local servers
 ├── vercel.json           # Vercel Serverless runtime & clean route masking
+├── favicon.svg           # Steaming momo brand vector favicon
+├── favicon.ico           # Multi-resolution Windows/browser icon
+├── apple-touch-icon.png  # High-res 180x180 iOS home screen touch icon
 ├── vendor.php            # Stall attendant verification terminal
 ├── Code.gs               # Google Apps Script database controller
 ├── PROJECT.md            # System specifications, architecture & test suite

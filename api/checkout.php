@@ -15,6 +15,13 @@ $confirmUrl = ($basePath ?: '') . '/confirm';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Checkout - Mama Momo</title>
+  <!-- Favicon & Touch Icons -->
+  <link rel="icon" type="image/svg+xml" href="<?= ($basePath ?: '') ?>/favicon.svg">
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="<?= ($basePath ?: '') ?>/favicon-32x32.png">
+  <link rel="alternate icon" type="image/png" sizes="16x16" href="<?= ($basePath ?: '') ?>/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="<?= ($basePath ?: '') ?>/apple-touch-icon.png">
+  <link rel="shortcut icon" href="<?= ($basePath ?: '') ?>/favicon.ico">
+  <meta name="theme-color" content="#ef4444">
   <style>
     * {
       box-sizing: border-box;
