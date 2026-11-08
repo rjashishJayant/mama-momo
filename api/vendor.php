@@ -71,7 +71,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'confirm_order') {
         echo json_encode(['success' => false, 'message' => 'Please enter your Vendor PIN.']);
         exit;
     }
-    $defaultPin = '1234';
+    global $VENDOR_PIN;
+    $defaultPin = $VENDOR_PIN ?? '1234';
     $isValid = ($pin === $defaultPin);
 
     if (!$isValid && strlen($pin) >= 4) {
@@ -208,7 +209,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'verify_vendor_pin') {
         echo json_encode(['success' => false, 'message' => 'Please enter your Vendor PIN.']);
         exit;
     }
-    $defaultPin = '1234';
+    global $VENDOR_PIN;
+    $defaultPin = $VENDOR_PIN ?? '1234';
     $isValid = ($pin === $defaultPin);
 
     if (!$isValid && strlen($pin) >= 4) {
@@ -319,7 +321,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_all_orders') {
         echo json_encode(['success' => false, 'message' => 'Vendor PIN is required. Access denied.']);
         exit;
     }
-    $defaultPin = '1234';
+    global $VENDOR_PIN;
+    $defaultPin = $VENDOR_PIN ?? '1234';
 
     // Verify PIN
     $isValid = ($pin === $defaultPin);
@@ -856,41 +859,70 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
       font-size: 0.75rem;
       color: #9ca3af;
     }
+    .vendor-gate-wrapper {
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
-  <div class="terminal-card">
-    <h2>🥟 Mama Momo Terminal</h2>
-    <p class="subtitle">Stall Attendant Order Verification &amp; Loyalty Logger</p>
-
-    <!-- Google Sheet Menu Sync Bar & Action Buttons -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:#111827; padding:9px 13px; border-radius:10px; border:1px solid #374151; flex-wrap:wrap; gap:8px;">
-      <span style="font-size:0.8rem; color:#9ca3af; display:flex; align-items:center; gap:6px;">
-        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e;"></span>
-        <span id="menuSyncSummary">Menu: Google Sheet Synced</span>
-      </span>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <button type="button" id="syncMenuBtn" style="background:#374151; color:#f3f4f6; border:0; padding:6px 12px; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;" onclick="syncMenuNow()">🔄 Sync Menu</button>
-        <button type="button" id="openOrdersBtn" style="background:#ef4444; color:#ffffff; border:0; padding:6px 12px; border-radius:6px; font-size:0.78rem; font-weight:700; cursor:pointer;" onclick="requestAllOrdersAccess()">📜 All Orders</button>
+  <!-- Vendor Page Entry Security Gate Screen -->
+  <div id="vendorGateScreen" class="vendor-gate-wrapper">
+    <div class="terminal-card" style="max-width: 420px; text-align: center; margin: 0 auto;">
+      <div style="font-size: 3rem; margin-bottom: 8px;">🔐</div>
+      <h2 style="font-size: 1.5rem; color: #ef4444; margin-bottom: 6px;">Vendor Access Protected</h2>
+      <p class="subtitle" style="margin-bottom: 20px;">
+        Enter your Stall Vendor PIN to access the attendant dashboard and confirm orders.
+      </p>
+      <div style="margin-bottom: 16px;">
+        <input type="password" id="gatePinInput" maxlength="12" placeholder="••••" autocomplete="new-password"
+          style="width: 100%; text-align: center; font-size: 1.6rem; letter-spacing: 6px; padding: 12px; background: #111827; border: 1px solid #4b5563; border-radius: 10px; color: #fff; outline: none;" autofocus>
+        <div id="gatePinError" style="display: none; color: #ef4444; font-size: 0.85rem; margin-top: 10px; font-weight: 600;"></div>
       </div>
+      <button type="button" id="btnGateUnlock" class="btn-check" style="width: 100%; padding: 14px; font-size: 1.05rem;" onclick="submitGatePin()">🔓 Unlock Vendor Terminal</button>
     </div>
+  </div>
 
-    <div class="search-box">
-      <label class="search-label" for="orderToken">Enter Customer Token</label>
-      <div class="token-input-group">
-        <input type="text" id="orderToken" placeholder="MMxxxx" maxlength="10" autocomplete="off" autofocus>
-        <button type="button" id="checkOrderBtn" class="btn-check">🔍 Check Order</button>
-      </div>
-      <div class="search-tip">Customer details and order summary pop up automatically upon checking.</div>
-    </div>
+  <!-- Main Vendor Terminal (Protected) -->
+  <div id="vendorTerminalContent" style="display: none; width: 100%; max-width: 480px; margin: 0 auto;">
+    <div class="terminal-card">
+      <h2>🥟 Mama Momo Terminal</h2>
+      <p class="subtitle">Stall Attendant Order Verification &amp; Loyalty Logger</p>
 
-    <div class="recent-section">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <div class="recent-title" style="margin-bottom:0;">📋 Latest 5 Orders</div>
-        <button type="button" style="background:transparent; border:0; color:#ef4444; font-size:0.78rem; font-weight:700; cursor:pointer; text-decoration:underline;" onclick="requestAllOrdersAccess()">View All History ➔</button>
+      <!-- Google Sheet Menu Sync Bar & Action Buttons -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:#111827; padding:9px 13px; border-radius:10px; border:1px solid #374151; flex-wrap:wrap; gap:8px;">
+        <span style="font-size:0.8rem; color:#9ca3af; display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e;"></span>
+          <span id="menuSyncSummary">Menu: Google Sheet Synced</span>
+        </span>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button type="button" id="syncMenuBtn" style="background:#374151; color:#f3f4f6; border:0; padding:6px 12px; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;" onclick="syncMenuNow()">🔄 Sync Menu</button>
+          <button type="button" id="openOrdersBtn" style="background:#ef4444; color:#ffffff; border:0; padding:6px 12px; border-radius:6px; font-size:0.78rem; font-weight:700; cursor:pointer;" onclick="requestAllOrdersAccess()">📜 All Orders</button>
+          <button type="button" id="lockTerminalBtn" style="background:#374151; color:#9ca3af; border:0; padding:6px 10px; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;" onclick="lockTerminal()" title="Lock Vendor Terminal">🔒 Lock</button>
+        </div>
       </div>
-      <div id="recentOrdersList">
-        <div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">Loading latest orders…</div>
+
+      <div class="search-box">
+        <label class="search-label" for="orderToken">Enter Customer Token</label>
+        <div class="token-input-group">
+          <input type="text" id="orderToken" placeholder="MMxxxx" maxlength="10" autocomplete="off" autofocus>
+          <button type="button" id="checkOrderBtn" class="btn-check">🔍 Check Order</button>
+        </div>
+        <div class="search-tip">Customer details and order summary pop up automatically upon checking.</div>
+      </div>
+
+      <div class="recent-section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div class="recent-title" style="margin-bottom:0;">📋 Latest 5 Orders</div>
+          <button type="button" style="background:transparent; border:0; color:#ef4444; font-size:0.78rem; font-weight:700; cursor:pointer; text-decoration:underline;" onclick="requestAllOrdersAccess()">View All History ➔</button>
+        </div>
+        <div id="recentOrdersList">
+          <div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">Loading latest orders…</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1035,6 +1067,98 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
   <script>
     const API_URL = <?= json_encode($APPS_SCRIPT_URL ?? "https://script.google.com/macros/s/AKfycbzgHkDCYHOk4z15LPAfFQ22a-BfY9_t4Q2LdUlsi4pYF4_uw0vpY3EXKuPcEU-W7pXfuA/exec") ?>;
     const VENDOR_ENDPOINT = window.location.pathname;
+
+    // ==========================================
+    // Vendor Page Entry Security Gate
+    // ==========================================
+    const vendorGateScreen = document.getElementById('vendorGateScreen');
+    const vendorTerminalContent = document.getElementById('vendorTerminalContent');
+    const gatePinInput = document.getElementById('gatePinInput');
+    const gatePinError = document.getElementById('gatePinError');
+    const btnGateUnlock = document.getElementById('btnGateUnlock');
+
+    function checkGateAuth() {
+      const isAuth = sessionStorage.getItem('vendor_authenticated') === 'true';
+      if (isAuth) {
+        if (vendorGateScreen) vendorGateScreen.style.display = 'none';
+        if (vendorTerminalContent) vendorTerminalContent.style.display = 'block';
+        setTimeout(() => {
+          const tInput = document.getElementById('orderToken');
+          if (tInput) tInput.focus();
+        }, 150);
+      } else {
+        if (vendorGateScreen) vendorGateScreen.style.display = 'flex';
+        if (vendorTerminalContent) vendorTerminalContent.style.display = 'none';
+        if (gatePinInput) {
+          gatePinInput.value = '';
+          setTimeout(() => gatePinInput.focus(), 150);
+        }
+      }
+    }
+
+    async function submitGatePin() {
+      const pin = gatePinInput.value.trim();
+      if (!pin) {
+        showGateError('Please enter your Vendor PIN.');
+        return;
+      }
+
+      btnGateUnlock.disabled = true;
+      btnGateUnlock.textContent = 'Verifying…';
+      gatePinError.style.display = 'none';
+
+      try {
+        const res = await fetch(`${VENDOR_ENDPOINT}?action=verify_vendor_pin&pin=${encodeURIComponent(pin)}`);
+        const data = await res.json();
+
+        if (data && data.success) {
+          sessionStorage.setItem('vendor_authenticated', 'true');
+          sessionStorage.setItem('vendor_pin', pin);
+          vendorGateScreen.style.display = 'none';
+          vendorTerminalContent.style.display = 'block';
+          const tInput = document.getElementById('orderToken');
+          if (tInput) tInput.focus();
+        } else {
+          showGateError((data && data.message) ? data.message : 'Incorrect Vendor PIN. Access denied.');
+        }
+      } catch (_) {
+        showGateError('Could not verify PIN. Please retry.');
+      } finally {
+        btnGateUnlock.disabled = false;
+        btnGateUnlock.textContent = '🔓 Unlock Vendor Terminal';
+      }
+    }
+
+    function showGateError(msg) {
+      gatePinError.textContent = msg;
+      gatePinError.style.display = 'block';
+      gatePinInput.value = '';
+      gatePinInput.focus();
+    }
+
+    if (gatePinInput) {
+      gatePinInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitGatePin();
+        }
+      });
+    }
+
+    function lockTerminal() {
+      sessionStorage.removeItem('vendor_authenticated');
+      sessionStorage.removeItem('vendor_pin');
+      if (vendorTerminalContent) vendorTerminalContent.style.display = 'none';
+      if (vendorGateScreen) vendorGateScreen.style.display = 'flex';
+      if (gatePinInput) {
+        gatePinInput.value = '';
+        gatePinError.style.display = 'none';
+        setTimeout(() => gatePinInput.focus(), 150);
+      }
+    }
+
+    // Verify authentication gate on load
+    checkGateAuth();
 
     function syncMenuNow() {
       const btn = document.getElementById('syncMenuBtn');
@@ -1235,7 +1359,10 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
 
     // Modal Confirm Submission
     modalConfirmBtn.addEventListener('click', async function() {
-      const pin = modalVendorPin.value.trim();
+      let pin = modalVendorPin.value.trim();
+      if (!pin) {
+        pin = sessionStorage.getItem('vendor_pin') || '';
+      }
       if (!pin) {
         alert('Please enter your Vendor PIN.');
         modalVendorPin.focus();

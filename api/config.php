@@ -12,6 +12,9 @@ if (!defined('MAMA_MOMO_INIT')) {
 // Google Apps Script Web App Deployment URL
 $APPS_SCRIPT_URL = getenv('APPS_SCRIPT_URL') ?: 'https://script.google.com/macros/s/AKfycbzgHkDCYHOk4z15LPAfFQ22a-BfY9_t4Q2LdUlsi4pYF4_uw0vpY3EXKuPcEU-W7pXfuA/exec';
 
+// Stall Vendor Master PIN (Default: 1234, can be overridden via VENDOR_PIN environment variable)
+$VENDOR_PIN = getenv('VENDOR_PIN') ?: '1234';
+
 // Menu Cache Configuration (Seconds)
 // Default: 120 seconds (2 minutes). Fast mobile rendering + near real-time sync with Google Sheets.
 $MENU_CACHE_TTL = (int)(getenv('MENU_CACHE_TTL') ?: 120);
