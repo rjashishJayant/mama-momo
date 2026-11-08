@@ -724,6 +724,11 @@ function constantTimeEquals_(a, b) {
   return result === 0;
 }
 
+// Typo-safe alias ensuring resilience if deployed Apps Script references constantTimeEyuals_
+function constantTimeEyuals_(a, b) {
+  return constantTimeEquals_(a, b);
+}
+
 function safeError_(err) {
   return (err && err.message) ? err.message : String(err);
 }

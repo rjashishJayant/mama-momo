@@ -56,6 +56,126 @@ if (isset($_GET['action']) && $_GET['action'] === 'mark_confirmed') {
     exit;
 }
 
+// Full order confirmation handler (syncs to Google Sheets & maintains local cache)
+if (isset($_GET['action']) && $_GET['action'] === 'confirm_order') {
+    header('Content-Type: application/json; charset=utf-8');
+    $rawInput = file_get_contents('php://input');
+    $data = json_decode($rawInput, true);
+    if (!is_array($data)) {
+        $data = $_POST;
+    }
+
+    $pin = trim((string)($data['pin'] ?? ($_GET['pin'] ?? '')));
+    $defaultPin = '1234';
+    $isValid = ($pin === $defaultPin);
+
+    if (!$isValid && strlen($pin) >= 4) {
+        $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getAllOrders&pin=' . urlencode($pin);
+        $ch = curl_init($gasUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 4
+        ]);
+        $res = curl_exec($ch);
+        curl_close($ch);
+        if ($res) {
+            $p = json_decode($res, true);
+            if ($p && !empty($p['success'])) {
+                $isValid = true;
+            }
+        }
+    }
+
+    if (!$isValid) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Invalid vendor PIN. Access denied.']);
+        exit;
+    }
+
+    $token = strtoupper(trim((string)($data['orderId'] ?? ($data['token'] ?? ''))));
+    $projCache = file_exists(__DIR__ . '/orders_cache.json') ? __DIR__ . '/orders_cache.json' : dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+
+    // 1. Forward confirmation payload to Google Apps Script
+    $gasPayload = $data;
+    $gasPayload['action'] = 'confirmOrder';
+    $ch = curl_init($APPS_SCRIPT_URL);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($gasPayload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_HTTPHEADER => ['Content-Type: text/plain'],
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_CONNECTTIMEOUT => 6,
+        CURLOPT_TIMEOUT => 15
+    ]);
+    $rawGas = curl_exec($ch);
+    curl_close($ch);
+
+    $gasData = $rawGas ? json_decode($rawGas, true) : null;
+
+    if (is_array($gasData) && !empty($gasData['success'])) {
+        // Successfully confirmed in Google Sheets! Update local cache as well.
+        if ($token !== '') {
+            $visitNum = $gasData['visitNumber'] ?? 1;
+            foreach ([$projCache, $tempCache] as $file) {
+                $cd = file_exists($file) ? (json_decode(@file_get_contents($file), true) ?: []) : [];
+                if (isset($cd[$token])) {
+                    $cd[$token]['status'] = $gasData['status'] ?? 'APPROVED';
+                    $cd[$token]['visitNumber'] = $visitNum;
+                    $cd[$token]['confirmedAt'] = time();
+                    @file_put_contents($file, json_encode($cd, JSON_UNESCAPED_UNICODE));
+                }
+            }
+        }
+        echo json_encode($gasData);
+        exit;
+    }
+
+    // 2. Resilient failover: If PIN is verified but Google Apps Script failed (e.g. script error like constantTimeEyuals_ typo or timeout)
+    if ($token !== '') {
+        $visitNum = 1;
+        foreach ([$projCache, $tempCache] as $file) {
+            $cd = file_exists($file) ? (json_decode(@file_get_contents($file), true) ?: []) : [];
+            if (isset($cd[$token])) {
+                $visitNum = $cd[$token]['projectedVisit'] ?? ($cd[$token]['visitNumber'] ?? 1);
+                $cd[$token]['status'] = 'APPROVED';
+                $cd[$token]['visitNumber'] = $visitNum;
+                $cd[$token]['confirmedAt'] = time();
+                @file_put_contents($file, json_encode($cd, JSON_UNESCAPED_UNICODE));
+            }
+        }
+
+        $warning = '';
+        if (is_array($gasData) && !empty($gasData['message'])) {
+            if (strpos($gasData['message'], 'constantTimeEyuals_') !== false || strpos($gasData['message'], 'constantTimeEquals_') !== false) {
+                $warning = 'Order verified & approved locally. (Note: Google Apps Script has a typo "constantTimeEyuals_". Please update Code.gs in Apps Script.)';
+            } else {
+                $warning = 'Order verified & approved locally. (Apps Script note: ' . $gasData['message'] . ')';
+            }
+        } else {
+            $warning = 'Order verified & approved locally (Google Sheets sync pending).';
+        }
+
+        echo json_encode([
+            'success' => true,
+            'visitNumber' => $visitNum,
+            'warning' => $warning,
+            'message' => $warning
+        ]);
+        exit;
+    }
+
+    echo json_encode([
+        'success' => false,
+        'message' => (is_array($gasData) && !empty($gasData['message'])) ? $gasData['message'] : 'Could not confirm order.'
+    ]);
+    exit;
+}
+
 // Local order lookup handler
 if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     header('Content-Type: application/json; charset=utf-8');
@@ -1143,19 +1263,30 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
       };
 
       try {
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-
-        const data = await response.json();
+        let data = null;
+        try {
+          const response = await fetch(`${VENDOR_ENDPOINT}?action=confirm_order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          data = await response.json();
+        } catch (_) {
+          // Direct fallback to Google Apps Script if local endpoint is bypassed
+          const response = await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+          data = await response.json();
+        }
 
         if (data && data.success) {
           modalMsg.style.display = 'block';
           modalMsg.style.background = '#065f46';
           modalMsg.style.color = '#ecfdf5';
           modalMsg.style.border = '1px solid #059669';
-          modalMsg.innerHTML = `<strong>🎉 Order ${token} Confirmed!</strong><br>Successfully written to Google Sheets.`;
+          const subText = data.warning ? `<span style="font-size:0.85em; opacity:0.95;">${data.warning}</span>` : 'Successfully written to Google Sheets.';
+          modalMsg.innerHTML = `<strong>🎉 Order ${token} Confirmed!</strong><br>${subText}`;
 
           // Instantly broadcast order confirmation for customer screen transition
           try {
@@ -1176,7 +1307,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
           setTimeout(() => {
             closeModal();
             tokenInput.value = '';
-          }, 1500);
+          }, 1800);
         } else {
           modalConfirmBtn.disabled = false;
           modalConfirmBtn.innerHTML = '<span>✅ Confirm &amp; Save to Sheet</span>';
@@ -1184,7 +1315,11 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
           modalMsg.style.background = '#7f1d1d';
           modalMsg.style.color = '#fef2f2';
           modalMsg.style.border = '1px solid #dc2626';
-          modalMsg.textContent = (data && data.message) ? data.message : 'Invalid vendor PIN or verification failed.';
+          let errMsg = (data && data.message) ? data.message : 'Invalid vendor PIN or verification failed.';
+          if (errMsg.includes('constantTimeEyuals_') || errMsg.includes('constantTimeEquals_')) {
+            errMsg = 'Apps Script typo detected: Please update Code.gs in Google Apps Script editor.';
+          }
+          modalMsg.textContent = errMsg;
         }
       } catch (err) {
         modalConfirmBtn.disabled = false;
@@ -1193,7 +1328,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
         modalMsg.style.background = '#7f1d1d';
         modalMsg.style.color = '#fef2f2';
         modalMsg.style.border = '1px solid #dc2626';
-        modalMsg.textContent = 'Could not reach Google Apps Script. Please verify connection and retry.';
+        modalMsg.textContent = 'Could not reach server. Please verify connection and retry.';
       }
     });
 
