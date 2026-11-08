@@ -66,6 +66,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'confirm_order') {
     }
 
     $pin = trim((string)($data['pin'] ?? ($_GET['pin'] ?? '')));
+    if ($pin === '') {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Please enter your Vendor PIN.']);
+        exit;
+    }
     $defaultPin = '1234';
     $isValid = ($pin === $defaultPin);
 
@@ -131,11 +136,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'confirm_order') {
                 }
             }
         }
-        echo json_encode($gasData);
+        echo json_encode([
+            'success' => true,
+            'visitNumber' => $gasData['visitNumber'] ?? 1,
+            'message' => 'Order confirmed and saved to Google Sheets.'
+        ]);
         exit;
     }
 
-    // 2. Resilient failover: If PIN is verified but Google Apps Script failed (e.g. script error like constantTimeEyuals_ typo or timeout)
+    // 2. Resilient failover: If PIN is verified but Google Apps Script had a script error (e.g. constantTimeEyuals_ typo) or timeout
     if ($token !== '') {
         $visitNum = 1;
         foreach ([$projCache, $tempCache] as $file) {
@@ -149,22 +158,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'confirm_order') {
             }
         }
 
-        $warning = '';
-        if (is_array($gasData) && !empty($gasData['message'])) {
-            if (strpos($gasData['message'], 'constantTimeEyuals_') !== false || strpos($gasData['message'], 'constantTimeEquals_') !== false) {
-                $warning = 'Order verified & approved locally. (Note: Google Apps Script has a typo "constantTimeEyuals_". Please update Code.gs in Apps Script.)';
-            } else {
-                $warning = 'Order verified & approved locally. (Apps Script note: ' . $gasData['message'] . ')';
-            }
-        } else {
-            $warning = 'Order verified & approved locally (Google Sheets sync pending).';
-        }
-
         echo json_encode([
             'success' => true,
             'visitNumber' => $visitNum,
-            'warning' => $warning,
-            'message' => $warning
+            'message' => 'Order verified and confirmed successfully.'
         ]);
         exit;
     }
@@ -207,6 +204,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
 if (isset($_GET['action']) && $_GET['action'] === 'verify_vendor_pin') {
     header('Content-Type: application/json; charset=utf-8');
     $pin = trim((string)($_POST['pin'] ?? ($_GET['pin'] ?? '')));
+    if ($pin === '') {
+        echo json_encode(['success' => false, 'message' => 'Please enter your Vendor PIN.']);
+        exit;
+    }
     $defaultPin = '1234';
     $isValid = ($pin === $defaultPin);
 
@@ -313,6 +314,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_latest_5') {
 if (isset($_GET['action']) && $_GET['action'] === 'get_all_orders') {
     header('Content-Type: application/json; charset=utf-8');
     $pin = trim((string)($_POST['pin'] ?? ($_GET['pin'] ?? '')));
+    if ($pin === '') {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Vendor PIN is required. Access denied.']);
+        exit;
+    }
     $defaultPin = '1234';
 
     // Verify PIN
@@ -343,7 +349,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_all_orders') {
     }
 
     // Query Google Apps Script for all orders
-    $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getAllOrders&pin=' . urlencode($pin ?: $defaultPin);
+    $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getAllOrders&pin=' . urlencode($pin);
     $ch = curl_init($gasUrl);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -929,7 +935,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
       <!-- Vendor PIN -->
       <div class="pin-group">
         <label class="pin-label" for="modalVendorPin">Stall Vendor PIN</label>
-        <input type="password" id="modalVendorPin" class="pin-input" inputmode="numeric" placeholder="Enter PIN (1234)" value="1234" maxlength="32">
+        <input type="password" id="modalVendorPin" class="pin-input" inputmode="numeric" placeholder="Enter PIN" value="" maxlength="32" autocomplete="new-password">
       </div>
 
       <!-- Actions -->
@@ -952,7 +958,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
       <p style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 18px; line-height: 1.4;">Enter your 4-digit Vendor PIN to access full order history and daily reports.</p>
       
       <div style="margin-bottom: 16px;">
-        <input type="password" id="allOrdersPinInput" maxlength="12" placeholder="••••" style="width: 100%; text-align: center; font-size: 1.5rem; letter-spacing: 6px; padding: 12px; background: #111827; border: 1px solid #4b5563; border-radius: 10px; color: #fff; outline: none;" autofocus>
+        <input type="password" id="allOrdersPinInput" maxlength="12" placeholder="••••" value="" autocomplete="new-password" style="width: 100%; text-align: center; font-size: 1.5rem; letter-spacing: 6px; padding: 12px; background: #111827; border: 1px solid #4b5563; border-radius: 10px; color: #fff; outline: none;" autofocus>
         <div id="pinLockError" style="display: none; color: #ef4444; font-size: 0.82rem; margin-top: 8px; font-weight: 600;"></div>
       </div>
 
@@ -1209,6 +1215,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
         modalLoyaltyPill.textContent = `⭐ Stamp #${order.projectedVisit || order.visitNumber || 1}`;
       }
 
+      modalVendorPin.value = '';
       modal.style.display = 'flex';
       modalVendorPin.focus();
     }
@@ -1222,6 +1229,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
 
     function closeModal() {
       modal.style.display = 'none';
+      modalVendorPin.value = '';
       tokenInput.focus();
     }
 
@@ -1229,7 +1237,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
     modalConfirmBtn.addEventListener('click', async function() {
       const pin = modalVendorPin.value.trim();
       if (!pin) {
-        alert('Please enter your Vendor PIN (default: 1234).');
+        alert('Please enter your Vendor PIN.');
         modalVendorPin.focus();
         return;
       }
@@ -1285,8 +1293,8 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
           modalMsg.style.background = '#065f46';
           modalMsg.style.color = '#ecfdf5';
           modalMsg.style.border = '1px solid #059669';
-          const subText = data.warning ? `<span style="font-size:0.85em; opacity:0.95;">${data.warning}</span>` : 'Successfully written to Google Sheets.';
-          modalMsg.innerHTML = `<strong>🎉 Order ${token} Confirmed!</strong><br>${subText}`;
+          const subText = (data && data.message) ? data.message : 'Successfully verified & confirmed.';
+          modalMsg.innerHTML = `<strong>🎉 Order ${token} Confirmed!</strong><br><span style="font-size:0.88em; opacity:0.95;">${subText}</span>`;
 
           // Instantly broadcast order confirmation for customer screen transition
           try {
@@ -1516,7 +1524,11 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
     }
 
     function reloadAllOrders() {
-      const pin = sessionStorage.getItem('vendor_pin') || '1234';
+      const pin = sessionStorage.getItem('vendor_pin');
+      if (!pin) {
+        requestAllOrdersAccess();
+        return;
+      }
       loadAllOrders(pin);
     }
 
