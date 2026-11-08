@@ -1,0 +1,32 @@
+{
+  "functions": {
+    "api/*.php": {
+      "runtime": "vercel-php@0.7.3"
+    },
+    "vendor.php": {
+      "runtime": "vercel-php@0.7.3"
+    }
+  },
+  "routes": [
+    {
+      "src": "^/$",
+      "dest": "/api/index.php"
+    },
+    {
+      "src": "^/menu/?$",
+      "dest": "/api/menu.php"
+    },
+    {
+      "src": "^/checkout/?$",
+      "dest": "/api/checkout.php"
+    },
+    {
+      "src": "^/confirm/?$",
+      "dest": "/api/confirm.php"
+    },
+    {
+      "src": "^/vendor/?$",
+      "dest": "/vendor.php"
+    }
+  ]
+}

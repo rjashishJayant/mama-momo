@@ -1,0 +1,26 @@
+# Apache rewrite configuration for Mama Momo
+# Mirrors vercel.json routing for local development (WAMP / Apache)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Do not rewrite real files or directories
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Root endpoint
+  RewriteRule ^$ api/index.php [L,QSA]
+
+  # Clean endpoints
+  RewriteRule ^menu/?$ api/menu.php [L,QSA]
+  RewriteRule ^checkout/?$ api/checkout.php [L,QSA]
+  RewriteRule ^confirm/?$ api/confirm.php [L,QSA]
+  RewriteRule ^vendor/?$ vendor.php [L,QSA]
+
+  # Handle /api prefix if accessed directly
+  RewriteRule ^api/menu/?$ api/menu.php [L,QSA]
+  RewriteRule ^api/checkout/?$ api/checkout.php [L,QSA]
+  RewriteRule ^api/confirm/?$ api/confirm.php [L,QSA]
+</IfModule>
+
+DirectoryIndex api/index.php
