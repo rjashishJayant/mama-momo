@@ -47,6 +47,99 @@ function doGet(e) {
       });
     }
 
+    // Fetch latest 5 orders for vendor terminal feed
+    if (action === 'getLatestOrders') {
+      const ordersSheet = ensureSheet_(ss, 'Orders', ORDER_HEADERS);
+      const lastRow = ordersSheet.getLastRow();
+      const list = [];
+      if (lastRow > 1) {
+        const data = ordersSheet.getRange(2, 1, lastRow - 1, 9).getValues();
+        for (let i = data.length - 1; i >= 0 && list.length < 5; i--) {
+          const rowOrderId = String(data[i][1] || '').trim().toUpperCase();
+          if (!rowOrderId) continue;
+          const rawDate = data[i][0];
+          let dateStr = '';
+          let timeStr = '';
+          if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+            const y = rawDate.getFullYear();
+            const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+            const d = String(rawDate.getDate()).padStart(2, '0');
+            dateStr = y + '-' + m + '-' + d;
+            timeStr = rawDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          } else if (rawDate) {
+            dateStr = String(rawDate);
+          }
+          list.push({
+            orderId: rowOrderId,
+            name: String(data[i][3] || ''),
+            phone: normalizePhone(data[i][2]),
+            items: String(data[i][4] || ''),
+            amount: parseFloat(data[i][5]) || 0,
+            visit: parseInt(data[i][6], 10) || 1,
+            time: timeStr,
+            date: dateStr,
+            status: String(data[i][8] || 'PENDING')
+          });
+        }
+      }
+      return jsonResponse({ success: true, count: list.length, orders: list });
+    }
+
+    // Fetch all orders with vendor password protection
+    if (action === 'getOrders' || action === 'getAllOrders') {
+      const pin = String((e && e.parameter && e.parameter.pin) || '').trim();
+      const configuredPin = PropertiesService.getScriptProperties().getProperty('VENDOR_PIN') || DEFAULT_VENDOR_PIN;
+      if (!constantTimeEquals_(pin, configuredPin)) {
+        return jsonResponse({ success: false, message: 'Invalid vendor password/PIN.' });
+      }
+
+      const ordersSheet = ensureSheet_(ss, 'Orders', ORDER_HEADERS);
+      const lastRow = ordersSheet.getLastRow();
+      const list = [];
+      if (lastRow > 1) {
+        const data = ordersSheet.getRange(2, 1, lastRow - 1, 9).getValues();
+        for (let i = data.length - 1; i >= 0; i--) {
+          const rowOrderId = String(data[i][1] || '').trim().toUpperCase();
+          if (!rowOrderId) continue;
+          const rawDate = data[i][0];
+          let dateStr = '';
+          let timeStr = '';
+          let isoDate = '';
+          if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+            isoDate = rawDate.toISOString();
+            const y = rawDate.getFullYear();
+            const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+            const d = String(rawDate.getDate()).padStart(2, '0');
+            dateStr = y + '-' + m + '-' + d;
+            timeStr = rawDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+          } else if (rawDate) {
+            dateStr = String(rawDate).split('T')[0] || String(rawDate);
+            isoDate = String(rawDate);
+          }
+
+          list.push({
+            orderId: rowOrderId,
+            timestamp: isoDate,
+            date: dateStr,
+            time: timeStr,
+            phone: normalizePhone(data[i][2]),
+            name: String(data[i][3] || ''),
+            items: String(data[i][4] || ''),
+            totalAmount: parseFloat(data[i][5]) || 0,
+            visitNumber: parseInt(data[i][6], 10) || 1,
+            discountApplied: String(data[i][7] || 'NO').toUpperCase() === 'YES',
+            status: String(data[i][8] || 'PENDING')
+          });
+        }
+      }
+
+      return jsonResponse({
+        success: true,
+        count: list.length,
+        orders: list
+      });
+    }
+
     if (action === 'getOrder') {
       const orderId = String((e && e.parameter && e.parameter.orderId) || '').trim().toUpperCase();
       if (!orderId) return jsonResponse({ success: false, message: 'Missing orderId parameter.' });

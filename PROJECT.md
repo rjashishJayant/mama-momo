@@ -201,8 +201,9 @@ Below is the definitive reference for all tabs, column headers, status flags, an
   - Prominent banner instructs: *"🔔 ORDER CONFIRMED - Please collect your freshly prepared momos at the counter!"*
   - Shows verified payment, token chip, updated loyalty stamps, and a *"Place Another Order"* button.
 
-### Screen 5: Vendor Verification Terminal (`vendor.php`)
-* Designed for the stall attendant's phone.
+### Screen 5: Vendor Verification Terminal (`vendor.php` / `api/vendor.php`)
+* Designed for the stall attendant's phone and tablet.
+* **Pixel-Perfect Search Bar:** Clean, aligned layout with `width: 0; flex: 1 1 auto; min-width: 0;` ensuring the `🔍 Check Order` button stays perfectly within the container borders with zero overflow.
 * **Customer Details Modal Popup:** Attendant enters the 6-character token and clicks **"🔍 Check Order"**. A dark-themed popup modal appears displaying:
   * Customer Name with avatar
   * Customer Mobile Number
@@ -211,7 +212,13 @@ Below is the definitive reference for all tabs, column headers, status flags, an
   * Real-time Loyalty Stamp pill (or 50% discount ribbon)
   * Vendor PIN input (default: `1234`)
 * **One-Click Confirmation:** Attendant clicks **"✅ Confirm & Save to Sheet"** inside the modal, which submits the full bundle (`orderId`, `phone`, `name`, `items`, `totalAmount`, `pin`) to Google Apps Script.
-* **Live Confirmed Feed:** Displays a live list of today's verified orders persisted across browser reloads.
+* **Latest 5 Orders Feed:** Automatically loads and displays the 5 most recent orders on the stall terminal with token, customer, amount, visit stamp, and time.
+* **PIN-Protected All Orders History Dashboard:**
+  * Access requires entering the 4-digit Vendor PIN (`1234`).
+  * **Default View of Today:** Automatically defaults to today's date and today's orders upon opening.
+  * **Date Filtering:** Quick pills (`🟢 Today`, `Yesterday`, `Last 7 Days`, `All Time`) plus a custom date picker.
+  * **Live Search:** Instant client-side search by token, customer name, mobile number, or item names.
+  * **Summary Metrics:** Dynamic real-time calculation of Total Orders, Total Revenue (₹), and Discounts Applied for the filtered view.
 
 ---
 
@@ -232,6 +239,11 @@ Below is the definitive reference for all tabs, column headers, status flags, an
 | **TC-11** | Vendor Reload | Attendant refreshes `/vendor` page | Last confirmed receipt remains displayed from local storage | **PASS** |
 | **TC-12** | Cooldown Enforcement | Repeat order confirmed for same phone within 12h | Status logged as `APPROVED_COOLDOWN`; stamp not incremented | **PASS** |
 | **TC-13** | Modal Popup | Check order token on `/vendor` | Customer Details modal popup appears with itemized breakdown & total | **PASS** |
+| **TC-14** | Search Button Layout | Inspect `.token-input-group` on `/vendor` | `🔍 Check Order` button has 0px overflow and aligns inside box boundary | **PASS** |
+| **TC-15** | Latest 5 Orders | Load `/vendor` feed | Displays up to 5 latest orders dynamically with token, name, amount, and stamp | **PASS** |
+| **TC-16** | PIN-Protected History | Click "📜 All Orders" without PIN | Modal `#pinLockModal` prevents access until valid PIN `1234` is verified | **PASS** |
+| **TC-17** | Today Default View | Open unlocked All Orders dashboard | Defaults to `🟢 Today` filter with today's date, metrics, and orders | **PASS** |
+| **TC-18** | History Date Filtering | Click `All Time` or change date picker | List dynamically updates to show orders matching selected period and recalculates metrics | **PASS** |
 
 ### Multi-User Browser Test Execution Evidence
 

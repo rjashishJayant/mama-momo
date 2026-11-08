@@ -82,6 +82,194 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     echo json_encode(['success' => false, 'message' => 'Token not found in local cache']);
     exit;
 }
+
+// Vendor PIN verification handler
+if (isset($_GET['action']) && $_GET['action'] === 'verify_vendor_pin') {
+    header('Content-Type: application/json; charset=utf-8');
+    $pin = trim((string)($_POST['pin'] ?? ($_GET['pin'] ?? '')));
+    $defaultPin = '1234';
+    $isValid = ($pin === $defaultPin);
+
+    if (!$isValid && strlen($pin) >= 4) {
+        $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getAllOrders&pin=' . urlencode($pin);
+        $ch = curl_init($gasUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 4
+        ]);
+        $res = curl_exec($ch);
+        curl_close($ch);
+        if ($res) {
+            $p = json_decode($res, true);
+            if ($p && !empty($p['success'])) {
+                $isValid = true;
+            }
+        }
+    }
+
+    if ($isValid) {
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Incorrect Vendor PIN. Access denied.']);
+    }
+    exit;
+}
+
+// Fetch latest 5 orders handler for terminal feed
+if (isset($_GET['action']) && $_GET['action'] === 'get_latest_5') {
+    header('Content-Type: application/json; charset=utf-8');
+    $orders = [];
+    $projCache = file_exists(__DIR__ . '/orders_cache.json') ? __DIR__ . '/orders_cache.json' : dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+
+    // 1. Gather from local caches
+    $localMap = [];
+    foreach ([$projCache, $tempCache] as $file) {
+        if (file_exists($file)) {
+            $cached = json_decode(@file_get_contents($file), true) ?: [];
+            foreach ($cached as $tok => $item) {
+                if (!isset($localMap[$tok])) {
+                    $localMap[$tok] = $item;
+                }
+            }
+        }
+    }
+
+    // Convert local items
+    foreach ($localMap as $tok => $item) {
+        $ts = $item['timestamp'] ?? time();
+        $orders[] = [
+            'orderId' => $tok,
+            'name' => $item['name'] ?? 'Customer',
+            'phone' => $item['phone'] ?? '',
+            'items' => $item['itemsDisplay'] ?? ($item['items'] ?? ''),
+            'amount' => (float)($item['finalPrice'] ?? ($item['totalAmount'] ?? 0)),
+            'visit' => (int)($item['visitNumber'] ?? ($item['visit'] ?? 1)),
+            'time' => date('h:i A', $ts),
+            'date' => date('Y-m-d', $ts),
+            'status' => $item['status'] ?? 'APPROVED'
+        ];
+    }
+
+    // Sort newest first
+    usort($orders, function($a, $b) {
+        return strcmp($b['orderId'], $a['orderId']);
+    });
+
+    // 2. Query Google Apps Script getLatestOrders if we need more or live data
+    if (count($orders) < 5) {
+        $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getLatestOrders';
+        $ch = curl_init($gasUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 3
+        ]);
+        $raw = curl_exec($ch);
+        curl_close($ch);
+        if ($raw) {
+            $p = json_decode($raw, true);
+            if ($p && !empty($p['orders']) && is_array($p['orders'])) {
+                $seen = array_flip(array_column($orders, 'orderId'));
+                foreach ($p['orders'] as $ord) {
+                    if (!isset($seen[$ord['orderId']])) {
+                        $orders[] = $ord;
+                        $seen[$ord['orderId']] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    $latest5 = array_slice($orders, 0, 5);
+    echo json_encode(['success' => true, 'count' => count($latest5), 'orders' => $latest5], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Fetch all orders with date filtering and PIN authorization
+if (isset($_GET['action']) && $_GET['action'] === 'get_all_orders') {
+    header('Content-Type: application/json; charset=utf-8');
+    $pin = trim((string)($_POST['pin'] ?? ($_GET['pin'] ?? '')));
+    $defaultPin = '1234';
+
+    // Verify PIN
+    $isValid = ($pin === $defaultPin);
+    if (!$isValid && strlen($pin) >= 4) {
+        $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getAllOrders&pin=' . urlencode($pin);
+        $ch = curl_init($gasUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 4
+        ]);
+        $res = curl_exec($ch);
+        curl_close($ch);
+        if ($res) {
+            $p = json_decode($res, true);
+            if ($p && !empty($p['success'])) {
+                $isValid = true;
+            }
+        }
+    }
+
+    if (!$isValid) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Invalid Vendor PIN. Access denied.']);
+        exit;
+    }
+
+    // Query Google Apps Script for all orders
+    $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getAllOrders&pin=' . urlencode($pin ?: $defaultPin);
+    $ch = curl_init($gasUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 6
+    ]);
+    $raw = curl_exec($ch);
+    curl_close($ch);
+
+    $allOrders = [];
+    if ($raw) {
+        $p = json_decode($raw, true);
+        if ($p && !empty($p['orders']) && is_array($p['orders'])) {
+            $allOrders = $p['orders'];
+        }
+    }
+
+    // Merge with any local cache orders not yet synced
+    $projCache = file_exists(__DIR__ . '/orders_cache.json') ? __DIR__ . '/orders_cache.json' : dirname(__DIR__) . '/orders_cache.json';
+    if (file_exists($projCache)) {
+        $cached = json_decode(@file_get_contents($projCache), true) ?: [];
+        $existing = array_flip(array_column($allOrders, 'orderId'));
+        foreach ($cached as $tok => $ord) {
+            if (!isset($existing[$tok])) {
+                $ts = $ord['timestamp'] ?? time();
+                array_unshift($allOrders, [
+                    'orderId' => $tok,
+                    'timestamp' => date('c', $ts),
+                    'date' => date('Y-m-d', $ts),
+                    'time' => date('h:i A', $ts),
+                    'phone' => $ord['phone'] ?? '',
+                    'name' => $ord['name'] ?? '',
+                    'items' => $ord['itemsDisplay'] ?? ($ord['items'] ?? ''),
+                    'totalAmount' => (float)($ord['finalPrice'] ?? ($ord['totalAmount'] ?? 0)),
+                    'visitNumber' => (int)($ord['visitNumber'] ?? ($ord['visit'] ?? 1)),
+                    'discountApplied' => !empty($ord['isDiscount']),
+                    'status' => $ord['status'] ?? 'APPROVED'
+                ]);
+            }
+        }
+    }
+
+    echo json_encode(['success' => true, 'count' => count($allOrders), 'orders' => $allOrders], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -134,10 +322,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     .search-box {
       background: #111827;
       border: 2px solid #374151;
-      padding: 18px;
+      padding: 16px;
       border-radius: 14px;
       margin-bottom: 20px;
       transition: border-color 0.2s;
+      width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
     }
     .search-box:focus-within {
       border-color: #ef4444;
@@ -153,16 +344,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     }
     .token-input-group {
       display: flex;
-      gap: 10px;
+      gap: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      align-items: stretch;
     }
     #orderToken {
-      flex: 1;
-      padding: 14px 16px;
+      flex: 1 1 auto;
+      min-width: 0;
+      width: 0;
+      box-sizing: border-box;
+      padding: 12px 14px;
       background: #1f2937;
       border: 1px solid #4b5563;
       border-radius: 10px;
       color: #ffffff;
-      font-size: 1.25rem;
+      font-size: 1.15rem;
       font-weight: 800;
       letter-spacing: 2px;
       text-transform: uppercase;
@@ -172,16 +369,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
       border-color: #ef4444;
     }
     .btn-check {
+      flex: 0 0 auto;
+      box-sizing: border-box;
       background: #ef4444;
       color: #ffffff;
       border: 0;
-      padding: 0 20px;
+      padding: 0 16px;
       border-radius: 10px;
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.95rem;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
       white-space: nowrap;
       transition: background 0.15s, transform 0.1s;
@@ -194,6 +394,55 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
       font-size: 0.78rem;
       color: #6b7280;
       margin-top: 8px;
+    }
+
+    /* Date Filter Pills */
+    .date-pill {
+      background: #1f2937;
+      border: 1px solid #4b5563;
+      color: #9ca3af;
+      padding: 5px 12px;
+      border-radius: 16px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .date-pill.active {
+      background: #ef4444;
+      border-color: #ef4444;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+    }
+    .order-hist-card {
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.88rem;
+      transition: border-color 0.15s;
+    }
+    .order-hist-card:hover {
+      border-color: #4b5563;
+    }
+    .hist-status-pill {
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .hist-status-approved {
+      background: #064e3b;
+      color: #6ee7b7;
+      border: 1px solid #059669;
+    }
+    .hist-status-pending {
+      background: #451a03;
+      color: #fcd34d;
+      border: 1px solid #d97706;
     }
 
     /* Modal Overlay & Card */
@@ -473,13 +722,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     <h2>🥟 Mama Momo Terminal</h2>
     <p class="subtitle">Stall Attendant Order Verification &amp; Loyalty Logger</p>
 
-    <!-- Google Sheet Menu Sync Bar -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:#111827; padding:9px 13px; border-radius:10px; border:1px solid #374151;">
+    <!-- Google Sheet Menu Sync Bar & Action Buttons -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:#111827; padding:9px 13px; border-radius:10px; border:1px solid #374151; flex-wrap:wrap; gap:8px;">
       <span style="font-size:0.8rem; color:#9ca3af; display:flex; align-items:center; gap:6px;">
         <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e;"></span>
         <span id="menuSyncSummary">Menu: Google Sheet Synced</span>
       </span>
-      <button type="button" id="syncMenuBtn" style="background:#374151; color:#f3f4f6; border:0; padding:5px 12px; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;" onclick="syncMenuNow()">🔄 Sync Menu</button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button type="button" id="syncMenuBtn" style="background:#374151; color:#f3f4f6; border:0; padding:6px 12px; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;" onclick="syncMenuNow()">🔄 Sync Menu</button>
+        <button type="button" id="openOrdersBtn" style="background:#ef4444; color:#ffffff; border:0; padding:6px 12px; border-radius:6px; font-size:0.78rem; font-weight:700; cursor:pointer;" onclick="requestAllOrdersAccess()">📜 All Orders</button>
+      </div>
     </div>
 
     <div class="search-box">
@@ -492,9 +744,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     </div>
 
     <div class="recent-section">
-      <div class="recent-title">📋 Today's Confirmed Orders</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div class="recent-title" style="margin-bottom:0;">📋 Latest 5 Orders</div>
+        <button type="button" style="background:transparent; border:0; color:#ef4444; font-size:0.78rem; font-weight:700; cursor:pointer; text-decoration:underline;" onclick="requestAllOrdersAccess()">View All History ➔</button>
+      </div>
       <div id="recentOrdersList">
-        <div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">No orders verified yet in this session.</div>
+        <div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">Loading latest orders…</div>
       </div>
     </div>
   </div>
@@ -551,6 +806,88 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
       </div>
 
       <div id="modalMsg" class="modal-msg"></div>
+    </div>
+  </div>
+
+  <!-- Vendor PIN Security Lock Modal (Before opening All Orders) -->
+  <div id="pinLockModal" class="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 380px; text-align: center;">
+      <div style="font-size: 2.5rem; margin-bottom: 8px;">🔐</div>
+      <h3 style="font-size: 1.25rem; font-weight: 800; color: #f3f4f6; margin-bottom: 6px;">Vendor Password Required</h3>
+      <p style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 18px; line-height: 1.4;">Enter your 4-digit Vendor PIN to access full order history and daily reports.</p>
+      
+      <div style="margin-bottom: 16px;">
+        <input type="password" id="allOrdersPinInput" maxlength="12" placeholder="••••" style="width: 100%; text-align: center; font-size: 1.5rem; letter-spacing: 6px; padding: 12px; background: #111827; border: 1px solid #4b5563; border-radius: 10px; color: #fff; outline: none;" autofocus>
+        <div id="pinLockError" style="display: none; color: #ef4444; font-size: 0.82rem; margin-top: 8px; font-weight: 600;"></div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn-cancel" style="flex: 1;" onclick="closePinLockModal()">Cancel</button>
+        <button type="button" class="btn-confirm" id="btnUnlockOrders" style="flex: 1;" onclick="submitPinForOrders()">Unlock Orders</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full Orders History & Date Filter Dashboard Modal -->
+  <div id="allOrdersModal" class="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 620px; max-height: 90vh; display: flex; flex-direction: column; padding: 22px 20px;">
+      
+      <!-- Modal Header -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 12px; margin-bottom: 14px;">
+        <div>
+          <h3 style="font-size: 1.25rem; font-weight: 800; color: #f3f4f6; display: flex; align-items: center; gap: 8px;">
+            <span>📋</span> All Orders History
+          </h3>
+          <div style="font-size: 0.78rem; color: #9ca3af; margin-top: 2px;">Defaulting to Today &bull; Filter by date</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button type="button" style="background:#374151; border:0; color:#f3f4f6; padding:5px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; cursor:pointer;" onclick="reloadAllOrders()">🔄 Refresh</button>
+          <button type="button" class="btn-close" style="padding:0; line-height:1;" onclick="closeAllOrdersModal()">&times;</button>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Summary -->
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;">
+        <div style="background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; text-align: center;">
+          <div style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; font-weight:700;">Orders</div>
+          <div id="summaryOrdersCount" style="font-size: 1.2rem; font-weight: 800; color: #f3f4f6;">0</div>
+        </div>
+        <div style="background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; text-align: center;">
+          <div style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; font-weight:700;">Revenue</div>
+          <div id="summaryRevenue" style="font-size: 1.2rem; font-weight: 800; color: #22c55e;">₹0.00</div>
+        </div>
+        <div style="background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; text-align: center;">
+          <div style="font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; font-weight:700;">Discounts</div>
+          <div id="summaryDiscounts" style="font-size: 1.2rem; font-weight: 800; color: #f59e0b;">0</div>
+        </div>
+      </div>
+
+      <!-- Date Filter Bar -->
+      <div style="background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+        <!-- Quick Filter Pills: Default is TODAY -->
+        <div style="display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 4px;">
+          <button type="button" class="date-pill active" id="pillToday" onclick="setDateFilter('today', this)">🟢 Today</button>
+          <button type="button" class="date-pill" onclick="setDateFilter('yesterday', this)">Yesterday</button>
+          <button type="button" class="date-pill" onclick="setDateFilter('7days', this)">Last 7 Days</button>
+          <button type="button" class="date-pill" onclick="setDateFilter('all', this)">All Time</button>
+        </div>
+
+        <!-- Custom Date Picker & Live Search Box -->
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 140px;">
+            <input type="date" id="orderCustomDate" style="width: 100%; padding: 8px 10px; background: #1f2937; border: 1px solid #4b5563; border-radius: 6px; color: #f3f4f6; font-size: 0.85rem;" onchange="onCustomDateChange(this.value)">
+          </div>
+          <div style="flex: 1.5; min-width: 160px;">
+            <input type="text" id="orderSearchFilter" placeholder="🔍 Search token, name, phone..." style="width: 100%; padding: 8px 10px; background: #1f2937; border: 1px solid #4b5563; border-radius: 6px; color: #f3f4f6; font-size: 0.85rem;" oninput="applyOrdersFilter()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Orders List Scroll Area -->
+      <div id="allOrdersList" style="flex: 1; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="text-align: center; color: #9ca3af; padding: 24px;">Loading orders…</div>
+      </div>
+
     </div>
   </div>
 
@@ -845,7 +1182,44 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
       }
     });
 
-    // Recent orders tracker in localStorage
+    // ==========================================
+    // Latest 5 Orders Feed
+    // ==========================================
+    function loadLatestOrders() {
+      fetch(`${VENDOR_ENDPOINT}?action=get_latest_5`)
+        .then(r => r.json())
+        .then(d => {
+          let serverOrders = (d && d.orders) ? d.orders : [];
+          let localRecents = [];
+          try {
+            localRecents = JSON.parse(localStorage.getItem('mama_recent_confirmed_list') || '[]');
+          } catch (_) {}
+
+          // Merge server orders and local recent orders without duplicates
+          const seen = {};
+          const combined = [];
+          for (const item of localRecents) {
+            if (item && item.orderId && !seen[item.orderId]) {
+              seen[item.orderId] = true;
+              combined.push(item);
+            }
+          }
+          for (const item of serverOrders) {
+            if (item && item.orderId && !seen[item.orderId]) {
+              seen[item.orderId] = true;
+              combined.push(item);
+            }
+          }
+
+          // Keep strictly the latest 5 orders
+          const latest5 = combined.slice(0, 5);
+          renderRecentOrdersList(latest5);
+        })
+        .catch(() => {
+          renderRecentOrdersFromLocal();
+        });
+    }
+
     function addRecentOrder(item) {
       let recents = [];
       try {
@@ -856,33 +1230,291 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
       try {
         localStorage.setItem('mama_recent_confirmed_list', JSON.stringify(recents));
       } catch (_) {}
-      renderRecentOrders();
+      loadLatestOrders();
     }
 
-    function renderRecentOrders() {
+    function renderRecentOrdersFromLocal() {
       let recents = [];
       try {
         recents = JSON.parse(localStorage.getItem('mama_recent_confirmed_list') || '[]');
       } catch (_) {}
-      if (!recents.length) {
+      renderRecentOrdersList(recents);
+    }
+
+    function renderRecentOrdersList(list) {
+      if (!list || !list.length) {
         recentList.innerHTML = '<div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">No orders verified yet in this session.</div>';
         return;
       }
-      recentList.innerHTML = recents.map(r => `
+      recentList.innerHTML = list.slice(0, 5).map(r => `
         <div class="recent-item">
           <div class="recent-left">
             <span class="recent-token">${r.orderId}</span>
             <span class="recent-name">${r.name} ${r.phone ? `(${r.phone})` : ''}</span>
+            ${r.items ? `<span style="font-size:0.75rem; color:#9ca3af; margin-top:1px;">${r.items}</span>` : ''}
           </div>
           <div class="recent-right">
             <div class="recent-price">₹${parseFloat(r.amount).toFixed(2)}</div>
-            <div class="recent-stamp">Visit #${r.visit} &bull; ${r.time}</div>
+            <div class="recent-stamp">Visit #${r.visit} &bull; ${r.time || 'Today'}</div>
           </div>
         </div>
       `).join('');
     }
 
-    renderRecentOrders();
+    // ==========================================
+    // All Orders History with Password Protection
+    // ==========================================
+    let cachedAllOrders = [];
+    let currentDateFilter = 'today'; // Default filter is Today!
+    const pinLockModal = document.getElementById('pinLockModal');
+    const allOrdersModal = document.getElementById('allOrdersModal');
+    const allOrdersPinInput = document.getElementById('allOrdersPinInput');
+    const pinLockError = document.getElementById('pinLockError');
+    const allOrdersList = document.getElementById('allOrdersList');
+
+    function getTodayIso() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function getYesterdayIso() {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function requestAllOrdersAccess() {
+      const savedPin = sessionStorage.getItem('vendor_pin');
+      if (savedPin) {
+        openAllOrdersDashboard(savedPin);
+      } else {
+        pinLockError.style.display = 'none';
+        allOrdersPinInput.value = '';
+        pinLockModal.style.display = 'flex';
+        setTimeout(() => allOrdersPinInput.focus(), 100);
+      }
+    }
+
+    function closePinLockModal() {
+      pinLockModal.style.display = 'none';
+      allOrdersPinInput.value = '';
+      pinLockError.style.display = 'none';
+    }
+
+    function closeAllOrdersModal() {
+      allOrdersModal.style.display = 'none';
+    }
+
+    async function submitPinForOrders() {
+      const pin = allOrdersPinInput.value.trim();
+      if (!pin) {
+        showPinError('Please enter your Vendor PIN.');
+        return;
+      }
+
+      const btn = document.getElementById('btnUnlockOrders');
+      btn.disabled = true;
+      btn.textContent = 'Verifying…';
+      pinLockError.style.display = 'none';
+
+      try {
+        const res = await fetch(`${VENDOR_ENDPOINT}?action=verify_vendor_pin&pin=${encodeURIComponent(pin)}`);
+        const data = await res.json();
+
+        if (data && data.success) {
+          sessionStorage.setItem('vendor_pin', pin);
+          closePinLockModal();
+          openAllOrdersDashboard(pin);
+        } else {
+          showPinError((data && data.message) ? data.message : 'Incorrect Vendor PIN. Access denied.');
+        }
+      } catch (_) {
+        showPinError('Could not verify PIN. Please retry.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Unlock Orders';
+      }
+    }
+
+    function showPinError(msg) {
+      pinLockError.textContent = msg;
+      pinLockError.style.display = 'block';
+      allOrdersPinInput.focus();
+    }
+
+    allOrdersPinInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitPinForOrders();
+      }
+    });
+
+    function openAllOrdersDashboard(pin) {
+      allOrdersModal.style.display = 'flex';
+      // Set default date picker value to Today
+      const todayIso = getTodayIso();
+      const dateInput = document.getElementById('orderCustomDate');
+      if (dateInput) dateInput.value = todayIso;
+      
+      // Default to Today pill
+      currentDateFilter = 'today';
+      document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+      const todayPill = document.getElementById('pillToday');
+      if (todayPill) todayPill.classList.add('active');
+
+      loadAllOrders(pin);
+    }
+
+    function reloadAllOrders() {
+      const pin = sessionStorage.getItem('vendor_pin') || '1234';
+      loadAllOrders(pin);
+    }
+
+    async function loadAllOrders(pin) {
+      allOrdersList.innerHTML = '<div style="text-align: center; color: #9ca3af; padding: 24px;">⏳ Loading orders from Google Sheets…</div>';
+      
+      try {
+        const res = await fetch(`${VENDOR_ENDPOINT}?action=get_all_orders&pin=${encodeURIComponent(pin)}`);
+        if (res.status === 401) {
+          sessionStorage.removeItem('vendor_pin');
+          closeAllOrdersModal();
+          requestAllOrdersAccess();
+          return;
+        }
+
+        const data = await res.json();
+        if (data && data.orders) {
+          cachedAllOrders = data.orders;
+          renderFilteredOrders();
+        } else {
+          allOrdersList.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 24px;">Failed to load orders.</div>';
+        }
+      } catch (err) {
+        allOrdersList.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 24px;">Could not connect to orders database.</div>';
+      }
+    }
+
+    function setDateFilter(type, btnEl) {
+      currentDateFilter = type;
+      document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+      if (btnEl) btnEl.classList.add('active');
+      renderFilteredOrders();
+    }
+
+    function onCustomDateChange(val) {
+      if (val) {
+        currentDateFilter = 'custom';
+        document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+        renderFilteredOrders();
+      }
+    }
+
+    function applyOrdersFilter() {
+      renderFilteredOrders();
+    }
+
+    function renderFilteredOrders() {
+      if (!allOrdersList) return;
+      
+      const todayIso = getTodayIso();
+      const yesterdayIso = getYesterdayIso();
+      const customVal = document.getElementById('orderCustomDate') ? document.getElementById('orderCustomDate').value : '';
+      const searchVal = document.getElementById('orderSearchFilter') ? document.getElementById('orderSearchFilter').value.trim().toLowerCase() : '';
+
+      // Date filtering
+      let filtered = cachedAllOrders.filter(ord => {
+        const ordDate = ord.date || (ord.timestamp ? ord.timestamp.split('T')[0] : '');
+        
+        if (currentDateFilter === 'today') {
+          return ordDate === todayIso;
+        } else if (currentDateFilter === 'yesterday') {
+          return ordDate === yesterdayIso;
+        } else if (currentDateFilter === '7days') {
+          if (!ordDate) return false;
+          const diffDays = (new Date(todayIso) - new Date(ordDate)) / (1000 * 3600 * 24);
+          return diffDays >= 0 && diffDays <= 7;
+        } else if (currentDateFilter === 'custom') {
+          return ordDate === customVal;
+        } else if (currentDateFilter === 'all') {
+          return true;
+        }
+        return true;
+      });
+
+      // Search keyword filtering
+      if (searchVal) {
+        filtered = filtered.filter(ord => {
+          const t = (ord.orderId || '').toLowerCase();
+          const n = (ord.name || '').toLowerCase();
+          const p = (ord.phone || '').toLowerCase();
+          const it = (ord.items || ord.itemsDisplay || '').toLowerCase();
+          return t.includes(searchVal) || n.includes(searchVal) || p.includes(searchVal) || it.includes(searchVal);
+        });
+      }
+
+      // Calculate Metrics
+      let totalRev = 0;
+      let totalDiscounts = 0;
+      filtered.forEach(o => {
+        totalRev += parseFloat(o.totalAmount || o.finalPrice || o.amount || 0);
+        if (o.discountApplied) totalDiscounts++;
+      });
+
+      document.getElementById('summaryOrdersCount').textContent = filtered.length;
+      document.getElementById('summaryRevenue').textContent = '₹' + totalRev.toFixed(2);
+      document.getElementById('summaryDiscounts').textContent = totalDiscounts;
+
+      if (!filtered.length) {
+        const filterName = (currentDateFilter === 'today') ? 'today' : (currentDateFilter === 'yesterday' ? 'yesterday' : (currentDateFilter === 'custom' ? customVal : 'selected filter'));
+        allOrdersList.innerHTML = `
+          <div style="text-align: center; color: #6b7280; padding: 36px 16px; background: #111827; border-radius: 10px; border: 1px dashed #374151;">
+            <div style="font-size: 2rem; margin-bottom: 8px;">🥟</div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: #9ca3af; margin-bottom: 4px;">No orders found for ${filterName}</div>
+            <div style="font-size: 0.8rem; color: #6b7280;">Try choosing another date or clicking "All Time" to view full history.</div>
+          </div>
+        `;
+        return;
+      }
+
+      allOrdersList.innerHTML = filtered.map(o => {
+        const isAppr = (o.status === 'APPROVED' || o.status === 'APPROVED_COOLDOWN');
+        const stClass = isAppr ? 'hist-status-approved' : 'hist-status-pending';
+        const stLabel = isAppr ? '✓ Approved' : '⏳ Pending';
+        const items = o.items || o.itemsDisplay || 'Momo Selection';
+        const amt = parseFloat(o.totalAmount || o.finalPrice || o.amount || 0).toFixed(2);
+        const visitLabel = o.visitNumber ? `Visit #${o.visitNumber}` : (o.visit ? `Visit #${o.visit}` : '');
+        const discountPill = o.discountApplied ? '<span style="font-size:0.7rem; background:#14532d; color:#86efac; padding:1px 6px; border-radius:6px; font-weight:700;">50% Off</span>' : '';
+
+        return `
+          <div class="order-hist-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="recent-token" style="font-size:1.05rem;">${o.orderId}</span>
+                <span class="hist-status-pill ${stClass}">${stLabel}</span>
+                ${discountPill}
+              </div>
+              <span style="font-size:0.78rem; color:#9ca3af; font-weight:600;">${o.time || ''} &bull; ${o.date || ''}</span>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+              <div style="flex:1;">
+                <div style="font-size:0.92rem; font-weight:700; color:#f3f4f6; margin-bottom:2px;">
+                  ${o.name || 'Customer'} ${o.phone ? `<span style="font-size:0.8rem; color:#9ca3af; font-weight:normal;">(${o.phone})</span>` : ''}
+                </div>
+                <div style="font-size:0.82rem; color:#d1d5db; line-height:1.35;">${items}</div>
+              </div>
+              <div style="text-align:right; flex-shrink:0;">
+                <div style="font-size:1.1rem; font-weight:800; color:#22c55e;">₹${amt}</div>
+                ${visitLabel ? `<div style="font-size:0.72rem; color:#9ca3af; font-weight:600;">${visitLabel}</div>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Auto-load latest 5 orders on boot
+    loadLatestOrders();
   </script>
 </body>
 </html>
