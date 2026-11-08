@@ -32,6 +32,9 @@ mama-momo/
 ├── favicon.svg           # Steaming momo brand vector favicon
 ├── favicon.ico           # Multi-resolution Windows/browser icon
 ├── apple-touch-icon.png  # High-res 180x180 iOS home screen touch icon
+├── qrcode.png            # High-resolution (1000px+) printable QR code for stall ordering
+├── qrcode.svg            # Scalable vector QR code for stall posters & stickers
+├── qr-card.html          # Ready-to-print counter standee / table tent card
 ├── vendor.php            # Stall attendant verification terminal
 ├── Code.gs               # Google Apps Script database controller
 ├── PROJECT.md            # System specifications, architecture & test suite
