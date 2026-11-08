@@ -2,9 +2,6 @@
   "functions": {
     "api/*.php": {
       "runtime": "vercel-php@0.7.3"
-    },
-    "vendor.php": {
-      "runtime": "vercel-php@0.7.3"
     }
   },
   "routes": [
@@ -26,7 +23,7 @@
     },
     {
       "src": "^/vendor/?$",
-      "dest": "/vendor.php"
+      "dest": "/api/vendor.php"
     }
   ]
 }

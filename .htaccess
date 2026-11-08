@@ -15,12 +15,13 @@
   RewriteRule ^menu/?$ api/menu.php [L,QSA]
   RewriteRule ^checkout/?$ api/checkout.php [L,QSA]
   RewriteRule ^confirm/?$ api/confirm.php [L,QSA]
-  RewriteRule ^vendor/?$ vendor.php [L,QSA]
+  RewriteRule ^vendor/?$ api/vendor.php [L,QSA]
 
   # Handle /api prefix if accessed directly
   RewriteRule ^api/menu/?$ api/menu.php [L,QSA]
   RewriteRule ^api/checkout/?$ api/checkout.php [L,QSA]
   RewriteRule ^api/confirm/?$ api/confirm.php [L,QSA]
+  RewriteRule ^api/vendor/?$ api/vendor.php [L,QSA]
 </IfModule>
 
 DirectoryIndex api/index.php
