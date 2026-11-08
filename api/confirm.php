@@ -24,6 +24,83 @@ if (isset($_GET['clear']) && $_GET['clear'] === '1') {
     exit;
 }
 
+// Background status polling for live order confirmation by vendor
+if (isset($_GET['action']) && $_GET['action'] === 'check_status') {
+    header('Content-Type: application/json; charset=utf-8');
+    $token = strtoupper(trim((string)($_GET['token'] ?? ($_SESSION['active_order']['orderId'] ?? ''))));
+    if ($token === '') {
+        echo json_encode(['success' => false, 'confirmed' => false, 'status' => 'UNKNOWN']);
+        exit;
+    }
+
+    // 1. Fast local order cache check
+    $projCache = dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+    foreach ([$projCache, $tempCache] as $file) {
+        if (file_exists($file)) {
+            $cached = json_decode(@file_get_contents($file), true) ?: [];
+            if (isset($cached[$token])) {
+                $st = strtoupper((string)($cached[$token]['status'] ?? 'PENDING'));
+                if ($st === 'APPROVED' || $st === 'APPROVED_COOLDOWN' || $st === 'CONFIRMED') {
+                    if (!empty($_SESSION['active_order']) && $_SESSION['active_order']['orderId'] === $token) {
+                        $_SESSION['active_order']['status'] = 'APPROVED';
+                    }
+                    echo json_encode([
+                        'success' => true,
+                        'confirmed' => true,
+                        'status' => $st,
+                        'visitNumber' => $cached[$token]['visitNumber'] ?? null
+                    ]);
+                    exit;
+                }
+            }
+        }
+    }
+
+    // 2. Authoritative check via Google Apps Script
+    $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getOrder&orderId=' . urlencode($token);
+    $ch = curl_init($gasUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT => 4
+    ]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+
+    if ($res) {
+        $parsed = json_decode($res, true);
+        if ($parsed && !empty($parsed['success']) && !empty($parsed['status'])) {
+            $st = strtoupper((string)$parsed['status']);
+            $isConfirmed = ($st === 'APPROVED' || $st === 'APPROVED_COOLDOWN' || $st === 'CONFIRMED');
+            if ($isConfirmed) {
+                if (!empty($_SESSION['active_order']) && $_SESSION['active_order']['orderId'] === $token) {
+                    $_SESSION['active_order']['status'] = 'APPROVED';
+                }
+                foreach ([$projCache, $tempCache] as $file) {
+                    $data = file_exists($file) ? (json_decode(@file_get_contents($file), true) ?: []) : [];
+                    if (isset($data[$token])) {
+                        $data[$token]['status'] = 'APPROVED';
+                        @file_put_contents($file, json_encode($data, JSON_UNESCAPED_UNICODE));
+                    }
+                }
+                echo json_encode([
+                    'success' => true,
+                    'confirmed' => true,
+                    'status' => $st,
+                    'visitNumber' => $parsed['visitNumber'] ?? null
+                ]);
+                exit;
+            }
+        }
+    }
+
+    echo json_encode(['success' => true, 'confirmed' => false, 'status' => 'PENDING']);
+    exit;
+}
+
 $errorMsg = null;
 $result = null;
 
@@ -178,6 +255,27 @@ $isCooldown = !empty($result['isCooldown']);
 $projectedVisit = (int)($result['projectedVisit'] ?? 1);
 $currentVisits = (int)($result['currentVisits'] ?? 0);
 $remainingVisits = (int)($result['remainingVisits'] ?? ($isDiscount ? 0 : (5 - ($projectedVisit % 5))));
+
+// Detect if order is already confirmed
+$isAlreadyConfirmed = false;
+if (!empty($result['status']) && ($result['status'] === 'APPROVED' || $result['status'] === 'APPROVED_COOLDOWN' || $result['status'] === 'CONFIRMED')) {
+    $isAlreadyConfirmed = true;
+} else {
+    $projCache = dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+    foreach ([$projCache, $tempCache] as $file) {
+        if (file_exists($file)) {
+            $cached = json_decode(@file_get_contents($file), true) ?: [];
+            if (isset($cached[(string)$result['orderId']])) {
+                $st = strtoupper((string)($cached[(string)$result['orderId']]['status'] ?? ''));
+                if ($st === 'APPROVED' || $st === 'APPROVED_COOLDOWN' || $st === 'CONFIRMED') {
+                    $isAlreadyConfirmed = true;
+                    break;
+                }
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -303,6 +401,30 @@ $remainingVisits = (int)($result['remainingVisits'] ?? ($isDiscount ? 0 : (5 - (
       margin-top: 18px;
       line-height: 1.4;
     }
+    .waiting-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-top: 14px;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: #2563eb;
+      border-radius: 50%;
+      animation: pulseDot 1.2s infinite ease-in-out;
+    }
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(0.85); opacity: 0.5; }
+      50% { transform: scale(1.35); opacity: 1; }
+    }
     .cooldown-note {
       font-size: 0.8rem;
       color: #718096;
@@ -315,10 +437,183 @@ $remainingVisits = (int)($result['remainingVisits'] ?? ($isDiscount ? 0 : (5 - (
       font-size: 0.85rem;
       text-decoration: none;
     }
+
+    /* Thank You & Collect Order Card */
+    .thankyou-card {
+      max-width: 440px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 32px 24px;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+      animation: popIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .success-ring {
+      width: 72px;
+      height: 72px;
+      background: #ecfdf5;
+      border: 3px solid #10b981;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      animation: bounceRing 0.6s ease-out;
+    }
+    @keyframes bounceRing {
+      0% { transform: scale(0.4); opacity: 0; }
+      60% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+    .checkmark {
+      font-size: 2.2rem;
+      color: #10b981;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .thankyou-title {
+      font-size: 1.55rem;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 14px;
+    }
+    .collect-banner {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border: 2px solid #f59e0b;
+      border-radius: 16px;
+      padding: 16px 14px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.15);
+    }
+    .collect-badge {
+      display: inline-block;
+      background: #b45309;
+      color: #ffffff;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .collect-main-msg {
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: #92400e;
+      line-height: 1.35;
+      margin-bottom: 10px;
+    }
+    .collect-token-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #ffffff;
+      padding: 6px 16px;
+      border-radius: 10px;
+      border: 1px solid #fbbf24;
+    }
+    .collect-token-label {
+      font-size: 0.8rem;
+      color: #78350f;
+      font-weight: 700;
+    }
+    .collect-token-badge {
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: #d9381e;
+      letter-spacing: 1.5px;
+    }
+    .confirmed-details-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 14px 16px;
+      text-align: left;
+      margin-bottom: 16px;
+      font-size: 0.92rem;
+    }
+    .conf-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .conf-row:last-child {
+      margin-bottom: 0;
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 8px;
+      margin-top: 8px;
+      align-items: center;
+    }
+    .conf-row span {
+      color: #64748b;
+    }
+    .conf-row strong {
+      color: #1e293b;
+      text-align: right;
+    }
+    .status-pill-confirmed {
+      background: #dcfce7;
+      color: #15803d;
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid #bbf7d0;
+    }
+    .loyalty-celebration {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      color: #166534;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      margin-bottom: 18px;
+    }
+    .btn-new-order {
+      display: block;
+      background: #d9381e;
+      color: #ffffff;
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 1rem;
+      text-decoration: none;
+      box-shadow: 0 4px 14px rgba(217, 56, 30, 0.25);
+      transition: transform 0.1s;
+    }
+    .btn-new-order:active {
+      transform: scale(0.98);
+    }
+    .btn-toggle-pass {
+      background: transparent;
+      border: 1px solid #cbd5e1;
+      color: #64748b;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.15s;
+    }
+    .btn-toggle-pass:hover {
+      background: #f1f5f9;
+      color: #334155;
+    }
   </style>
 </head>
 <body>
-  <div class="pass-card">
+  <!-- PASS CARD (Active before vendor confirmation) -->
+  <div class="pass-card" id="passCard" style="<?= $isAlreadyConfirmed ? 'display: none;' : 'display: block;' ?>">
     <?php if ($isDiscount): ?>
       <div class="ribbon-discount">🎉 5th VISIT: 50% OFF UNLOCKED!</div>
     <?php elseif ($isCooldown): ?>
@@ -360,6 +655,11 @@ $remainingVisits = (int)($result['remainingVisits'] ?? ($isDiscount ? 0 : (5 - (
       📢 Show this screen to the counter staff to verify.
     </div>
 
+    <div class="waiting-badge" id="waitingBadge">
+      <span class="pulse-dot"></span>
+      <span>Waiting for counter verification &amp; confirmation…</span>
+    </div>
+
     <?php if ($isCooldown): ?>
       <div class="cooldown-note">
         Orders within 12 hours of your last visit are logged without incrementing loyalty stamps.
@@ -367,6 +667,62 @@ $remainingVisits = (int)($result['remainingVisits'] ?? ($isDiscount ? 0 : (5 - (
     <?php endif; ?>
 
     <a href="<?= htmlspecialchars($menuUrl, ENT_QUOTES, 'UTF-8') ?>?clear=1" class="new-order-link" onclick="clearLocalActiveOrder()">Place Another Order</a>
+  </div>
+
+  <!-- THANK YOU & COLLECT ORDER CARD (Revealed upon vendor confirmation) -->
+  <div class="thankyou-card" id="thankYouCard" style="<?= $isAlreadyConfirmed ? 'display: block;' : 'display: none;' ?>">
+    <div class="success-ring">
+      <span class="checkmark">✓</span>
+    </div>
+
+    <h1 class="thankyou-title">Thank You, <?= $displayName ?>!</h1>
+
+    <div class="collect-banner">
+      <div class="collect-badge">🔔 ORDER CONFIRMED</div>
+      <div class="collect-main-msg">Please collect your freshly prepared momos at the counter!</div>
+      <div class="collect-token-row">
+        <span class="collect-token-label">Your Token:</span>
+        <span class="collect-token-badge"><?= $orderId ?></span>
+      </div>
+    </div>
+
+    <div class="confirmed-details-card">
+      <div class="conf-row">
+        <span>Customer:</span>
+        <strong><?= $displayName ?> (<?= $displayPhone ?>)</strong>
+      </div>
+      <div class="conf-row">
+        <span>Items:</span>
+        <strong><?= $displayItems ?></strong>
+      </div>
+      <div class="conf-row">
+        <span>Amount Paid:</span>
+        <strong style="color: #166534; font-size: 1.05rem;">₹<?= number_format($resFinal, 2) ?> (Verified &amp; Paid)</strong>
+      </div>
+      <div class="conf-row">
+        <span>Status:</span>
+        <span class="status-pill-confirmed">✓ Confirmed &amp; Stamped</span>
+      </div>
+    </div>
+
+    <div class="loyalty-celebration">
+      <?php if ($isDiscount): ?>
+        🎉 <strong>50% Loyalty Discount Applied!</strong> Enjoy your half-price momos!
+      <?php elseif ($isCooldown): ?>
+        🕒 <strong>Visit Recorded!</strong> Stamp counter maintained under cooldown.
+      <?php else: ?>
+        ⭐ <strong>Stamp Recorded!</strong> Visit <?= $projectedVisit ?> of 5 stamped &bull; <?= $remainingVisits ?> more until 50% OFF!
+      <?php endif; ?>
+    </div>
+
+    <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+      <a href="<?= htmlspecialchars($menuUrl, ENT_QUOTES, 'UTF-8') ?>?clear=1" class="btn-new-order" onclick="clearLocalActiveOrder()">
+        🥟 Place Another Order
+      </a>
+      <button type="button" class="btn-toggle-pass" onclick="togglePassView()">
+        📋 View Original Token Pass
+      </button>
+    </div>
   </div>
 
   <script>
@@ -396,6 +752,101 @@ $remainingVisits = (int)($result['remainingVisits'] ?? ($isDiscount ? 0 : (5 - (
         try {
             localStorage.removeItem('mama_active_order');
         } catch (_) {}
+    }
+
+    let isOrderConfirmed = <?= $isAlreadyConfirmed ? 'true' : 'false' ?>;
+    let pollTimer = null;
+
+    function showThankYouScreen() {
+      if (isOrderConfirmed && document.getElementById('thankYouCard').style.display !== 'none') return;
+      isOrderConfirmed = true;
+      if (pollTimer) clearInterval(pollTimer);
+
+      playCelebrationTone();
+      if (navigator.vibrate) {
+        try { navigator.vibrate([150, 80, 200]); } catch (_) {}
+      }
+
+      const passCard = document.getElementById('passCard');
+      const thankYouCard = document.getElementById('thankYouCard');
+
+      if (passCard) passCard.style.display = 'none';
+      if (thankYouCard) thankYouCard.style.display = 'block';
+
+      try {
+        localStorage.setItem('mama_confirmed_' + orderData.orderId.toUpperCase(), 'APPROVED');
+      } catch (_) {}
+    }
+
+    function playCelebrationTone() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.frequency.setValueAtTime(587.33, now);
+        gain1.gain.setValueAtTime(0.2, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.22);
+
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.frequency.setValueAtTime(880, now + 0.12);
+        gain2.gain.setValueAtTime(0.25, now + 0.12);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.12);
+        osc2.stop(now + 0.5);
+      } catch (_) {}
+    }
+
+    function pollOrderStatus() {
+      if (isOrderConfirmed) return;
+
+      // Tier 1: Check localStorage (instant same-browser cross-tab signal)
+      try {
+        const localStatus = localStorage.getItem('mama_confirmed_' + orderData.orderId.toUpperCase());
+        if (localStatus === 'APPROVED' || localStatus === 'CONFIRMED') {
+          showThankYouScreen();
+          return;
+        }
+      } catch (_) {}
+
+      // Tier 2: Check server endpoint
+      fetch('confirm?action=check_status&token=' + encodeURIComponent(orderData.orderId))
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.confirmed) {
+            showThankYouScreen();
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (!isOrderConfirmed) {
+      pollTimer = setInterval(pollOrderStatus, 2200);
+      setTimeout(pollOrderStatus, 400);
+    }
+
+    function togglePassView() {
+      const passCard = document.getElementById('passCard');
+      const thankYouCard = document.getElementById('thankYouCard');
+      if (!passCard || !thankYouCard) return;
+
+      if (passCard.style.display === 'none') {
+        passCard.style.display = 'block';
+        thankYouCard.style.display = 'none';
+      } else {
+        passCard.style.display = 'none';
+        thankYouCard.style.display = 'block';
+      }
     }
   </script>
 </body>

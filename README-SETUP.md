@@ -5,8 +5,7 @@
 - `/menu` → `api/menu.php`
 - `/checkout` → `api/checkout.php`
 - `/confirm` → `api/confirm.php`
-- `/vendor` → `vendor.php`
-- `/vendor-confirm` → `api/vendor-confirm.php` (server-side proxy; vendor PIN is not sent directly from browser to Apps Script)
+- `/vendor` → `api/vendor.php` (with root `vendor.php` forwarder for local WAMP)
 - `api/config.php` contains the Apps Script deployment URL and the PHP display menu. Do not put the vendor PIN in this file.
 
 ## 1. Google Sheets
@@ -55,7 +54,16 @@ The menu is now completely dynamic and managed directly from the **`Menu`** tab 
 - Only one active pending order per phone number is allowed at a time.
 - An order can transition from PENDING to CONFIRMED only once. Duplicate confirmation is rejected under a script lock.
 
-## 5. Vercel deployment
+## 5. Live Order Confirmation & Thank You Collection Screen
+- When a customer generates an order, their `/confirm` screen displays the order token pass and instructions to present it at the counter.
+- While the customer is at the counter, the `/confirm` screen actively listens for vendor confirmation (via fast local polling and Google Apps Script).
+- As soon as the attendant confirms the order in the vendor terminal (`/vendor`), the customer's screen automatically transitions to the **Thank You & Collect Order** screen with:
+  - Celebration audio chime & haptic feedback.
+  - Prominent **"🔔 ORDER CONFIRMED - Please collect your freshly prepared momos at the counter!"** banner.
+  - Token and itemized paid order summary.
+  - Updated loyalty stamp progress and an option to place another order.
+
+## 6. Vercel deployment
 Deploy the entire folder contents. Confirm the PHP runtime supports cURL and `mbstring` (the code uses `mb_strlen`). If `mbstring` is not available, replace `mb_strlen($name)` with `strlen($name)` or enable the extension. PHP cURL must be enabled.
 
 ## 6. Smoke tests

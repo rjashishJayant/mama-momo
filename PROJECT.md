@@ -190,11 +190,16 @@ Below is the definitive reference for all tabs, column headers, status flags, an
 * Clears `localStorage` cart upon submission to prevent double submission.
 * Dispatches form POST to `/confirm`.
 
-### Screen 4: Confirmation & Order Pass (`api/confirm.php`)
+### Screen 4: Confirmation, Live Polling & Thank You Screen (`api/confirm.php`)
 * **Post-Redirect-Get (PRG) Pattern:** POST processes `createOrder` via cURL to Google Apps Script, saves order state into session, and redirects (HTTP 303) to GET `/confirm`.
 * **Refresh Proof:** Reloading the browser maintains the exact same order token and details without triggering form resubmission or creating duplicate orders.
 * **Pass Display:** Prominent 6-character token (e.g. `MM4922`), customer details, discount ribbon, and counter instruction:
   > *"📢 Show this screen to the counter staff to verify."*
+* **Live Vendor Confirmation & Collection Screen:** While the customer waits, the screen listens for vendor confirmation (via fast local polling and Google Apps Script). As soon as the vendor approves the order:
+  - An audio celebration chime and haptic feedback play.
+  - The card smoothly transitions to the **"Thank You & Collect Order"** screen.
+  - Prominent banner instructs: *"🔔 ORDER CONFIRMED - Please collect your freshly prepared momos at the counter!"*
+  - Shows verified payment, token chip, updated loyalty stamps, and a *"Place Another Order"* button.
 
 ### Screen 5: Vendor Verification Terminal (`vendor.php`)
 * Designed for the stall attendant's phone.

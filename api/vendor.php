@@ -34,6 +34,28 @@ if (isset($_GET['action']) && ($_GET['action'] === 'sync_menu' || $_GET['action'
     exit;
 }
 
+// Local order confirmation handler
+if (isset($_GET['action']) && $_GET['action'] === 'mark_confirmed') {
+    header('Content-Type: application/json; charset=utf-8');
+    $token = strtoupper(trim((string)($_GET['token'] ?? '')));
+    $visit = (int)($_GET['visit'] ?? 1);
+    $projCache = file_exists(__DIR__ . '/orders_cache.json') ? __DIR__ . '/orders_cache.json' : dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+    if ($token !== '') {
+        foreach ([$projCache, $tempCache] as $file) {
+            $data = file_exists($file) ? (json_decode(@file_get_contents($file), true) ?: []) : [];
+            if (isset($data[$token])) {
+                $data[$token]['status'] = 'APPROVED';
+                $data[$token]['visitNumber'] = $visit;
+                $data[$token]['confirmedAt'] = time();
+                @file_put_contents($file, json_encode($data, JSON_UNESCAPED_UNICODE));
+            }
+        }
+    }
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 // Local order lookup handler
 if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     header('Content-Type: application/json; charset=utf-8');
@@ -782,6 +804,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
           modalMsg.style.color = '#ecfdf5';
           modalMsg.style.border = '1px solid #059669';
           modalMsg.innerHTML = `<strong>🎉 Order ${token} Confirmed!</strong><br>Successfully written to Google Sheets.`;
+
+          // Instantly broadcast order confirmation for customer screen transition
+          try {
+            localStorage.setItem('mama_confirmed_' + token, 'APPROVED');
+          } catch (_) {}
+          fetch(`${VENDOR_ENDPOINT}?action=mark_confirmed&token=${encodeURIComponent(token)}&visit=${data.visitNumber || 1}`).catch(() => {});
 
           // Add to recent orders ledger
           addRecentOrder({
