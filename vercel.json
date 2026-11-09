@@ -6,7 +6,11 @@
   },
   "routes": [
     {
-      "src": "^/(assets/.*|favicon.*|apple-touch-icon.*|qrcode.*|mama_momo_qr.*|qr-card\\.html)$",
+      "src": "^/assets/(.*)$",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "^/(mama-momo.*|loader-momo.*|favicon.*|apple-touch-icon.*|qrcode.*|mama_momo_qr.*|qr-card\\.html)$",
       "dest": "/$1"
     },
     {
