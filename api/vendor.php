@@ -240,6 +240,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'verify_vendor_pin') {
     exit;
 }
 
+// Fetch unverified (PENDING) orders handler for terminal feed
+if (isset($_GET['action']) && $_GET['action'] === 'get_unverified_orders') {
+    header('Content-Type: application/json; charset=utf-8');
+    $unverified = getUnverifiedOrders();
+    echo json_encode([
+        'success' => true,
+        'count' => count($unverified),
+        'orders' => $unverified
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // Fetch latest 5 orders handler for terminal feed
 if (isset($_GET['action']) && $_GET['action'] === 'get_latest_5') {
     header('Content-Type: application/json; charset=utf-8');
@@ -917,11 +929,17 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
 
       <div class="recent-section">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <div class="recent-title" style="margin-bottom:0;">📋 Latest 5 Orders</div>
-          <button type="button" style="background:transparent; border:0; color:#ef4444; font-size:0.78rem; font-weight:700; cursor:pointer; text-decoration:underline;" onclick="requestAllOrdersAccess()">View All History ➔</button>
+          <div class="recent-title" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
+            <span>⏳ Unverified Orders Queue</span>
+            <span id="unverifiedCountBadge" style="background:#ef4444; color:#fff; font-size:0.75rem; padding:2px 8px; border-radius:12px; font-weight:800;">0</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button type="button" style="background:#374151; border:0; color:#f3f4f6; font-size:0.75rem; font-weight:600; padding:4px 8px; border-radius:6px; cursor:pointer;" onclick="loadUnverifiedOrders()">🔄 Refresh</button>
+            <button type="button" style="background:transparent; border:0; color:#ef4444; font-size:0.78rem; font-weight:700; cursor:pointer; text-decoration:underline;" onclick="requestAllOrdersAccess()">History ➔</button>
+          </div>
         </div>
-        <div id="recentOrdersList">
-          <div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">Loading latest orders…</div>
+        <div id="unverifiedOrdersList">
+          <div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">Loading unverified orders…</div>
         </div>
       </div>
     </div>
@@ -1212,7 +1230,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
     const modalFinalPrice = document.getElementById('modalFinalPrice');
     const modalLoyaltyPill = document.getElementById('modalLoyaltyPill');
     const modalVendorPin = document.getElementById('modalVendorPin');
-    const recentList = document.getElementById('recentOrdersList');
+    const unverifiedList = document.getElementById('unverifiedOrdersList');
 
     // In-memory active order being verified in modal
     let activeModalOrder = null;
@@ -1339,7 +1357,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
         modalLoyaltyPill.textContent = `⭐ Stamp #${order.projectedVisit || order.visitNumber || 1}`;
       }
 
-      modalVendorPin.value = '';
+      modalVendorPin.value = sessionStorage.getItem('vendor_pin') || '';
       modal.style.display = 'flex';
       modalVendorPin.focus();
     }
@@ -1429,20 +1447,11 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
           } catch (_) {}
           fetch(`${VENDOR_ENDPOINT}?action=mark_confirmed&token=${encodeURIComponent(token)}&visit=${data.visitNumber || 1}`).catch(() => {});
 
-          // Add to recent orders ledger
-          addRecentOrder({
-            orderId: token,
-            name: name,
-            phone: phone,
-            amount: totalAmount,
-            visit: data.visitNumber || data.visitCount || 1,
-            time: new Date().toLocaleTimeString()
-          });
-
           setTimeout(() => {
             closeModal();
             tokenInput.value = '';
-          }, 1800);
+            loadUnverifiedOrders();
+          }, 1500);
         } else {
           modalConfirmBtn.disabled = false;
           modalConfirmBtn.innerHTML = '<span>✅ Confirm &amp; Save to Sheet</span>';
@@ -1468,82 +1477,105 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
     });
 
     // ==========================================
-    // Latest 5 Orders Feed
+    // Unverified (Pending) Orders Queue
     // ==========================================
-    function loadLatestOrders() {
-      fetch(`${VENDOR_ENDPOINT}?action=get_latest_5`)
-        .then(r => r.json())
-        .then(d => {
-          let serverOrders = (d && d.orders) ? d.orders : [];
-          let localRecents = [];
-          try {
-            localRecents = JSON.parse(localStorage.getItem('mama_recent_confirmed_list') || '[]');
-          } catch (_) {}
+    const unverifiedListEl = document.getElementById('unverifiedOrdersList');
+    const unverifiedCountBadge = document.getElementById('unverifiedCountBadge');
+    let unverifiedOrdersCache = {};
+    let lastRenderedJson = '';
 
-          // Merge server orders and local recent orders without duplicates
-          const seen = {};
-          const combined = [];
-          for (const item of localRecents) {
-            if (item && item.orderId && !seen[item.orderId]) {
-              seen[item.orderId] = true;
-              combined.push(item);
-            }
-          }
-          for (const item of serverOrders) {
-            if (item && item.orderId && !seen[item.orderId]) {
-              seen[item.orderId] = true;
-              combined.push(item);
-            }
-          }
-
-          // Keep strictly the latest 5 orders
-          const latest5 = combined.slice(0, 5);
-          renderRecentOrdersList(latest5);
-        })
-        .catch(() => {
-          renderRecentOrdersFromLocal();
-        });
+    async function loadUnverifiedOrders() {
+      if (!unverifiedListEl) return;
+      try {
+        const res = await fetch(`${VENDOR_ENDPOINT}?action=get_unverified_orders`);
+        const data = await res.json();
+        const orders = (data && data.orders) ? data.orders : [];
+        renderUnverifiedOrdersList(orders);
+      } catch (err) {
+        // Retry silently
+      }
     }
 
-    function addRecentOrder(item) {
-      let recents = [];
-      try {
-        recents = JSON.parse(localStorage.getItem('mama_recent_confirmed_list') || '[]');
-      } catch (_) {}
-      recents.unshift(item);
-      if (recents.length > 5) recents.pop();
-      try {
-        localStorage.setItem('mama_recent_confirmed_list', JSON.stringify(recents));
-      } catch (_) {}
-      loadLatestOrders();
-    }
+    function renderUnverifiedOrdersList(list) {
+      if (!unverifiedListEl) return;
+      const currentJson = JSON.stringify(list);
+      if (currentJson === lastRenderedJson) {
+        return; // Avoid DOM rebuild if orders dataset is unchanged
+      }
+      lastRenderedJson = currentJson;
 
-    function renderRecentOrdersFromLocal() {
-      let recents = [];
-      try {
-        recents = JSON.parse(localStorage.getItem('mama_recent_confirmed_list') || '[]');
-      } catch (_) {}
-      renderRecentOrdersList(recents);
-    }
+      unverifiedOrdersCache = {};
+      list.forEach(o => {
+        if (o && o.orderId) {
+          unverifiedOrdersCache[o.orderId.toUpperCase()] = o;
+        }
+      });
 
-    function renderRecentOrdersList(list) {
-      if (!list || !list.length) {
-        recentList.innerHTML = '<div style="font-size: 0.85rem; color: #6b7280; text-align: center; padding: 12px;">No orders verified yet in this session.</div>';
+      const count = list.length;
+      if (unverifiedCountBadge) {
+        unverifiedCountBadge.textContent = count;
+        unverifiedCountBadge.style.background = count > 0 ? '#ef4444' : '#10b981';
+      }
+
+      if (count === 0) {
+        unverifiedListEl.innerHTML = `
+          <div style="text-align: center; color: #9ca3af; padding: 22px 14px; background: #111827; border-radius: 12px; border: 1px dashed #374151;">
+            <div style="font-size: 1.8rem; margin-bottom: 6px;">✨</div>
+            <div style="font-size: 0.92rem; font-weight: 700; color: #f3f4f6; margin-bottom: 4px;">All caught up!</div>
+            <div style="font-size: 0.78rem; color: #6b7280;">No unverified orders pending. New customer orders will show here in real-time.</div>
+          </div>
+        `;
         return;
       }
-      recentList.innerHTML = list.slice(0, 5).map(r => `
-        <div class="recent-item">
-          <div class="recent-left">
-            <span class="recent-token">${r.orderId}</span>
-            <span class="recent-name">${r.name} ${r.phone ? `(${r.phone})` : ''}</span>
-            ${r.items ? `<span style="font-size:0.75rem; color:#9ca3af; margin-top:1px;">${r.items}</span>` : ''}
+
+      unverifiedListEl.innerHTML = list.map(o => {
+        const tok = o.orderId;
+        const name = o.name || 'Customer';
+        const phone = o.phone || '';
+        const items = o.itemsDisplay || o.items || 'Momo Selection';
+        const price = parseFloat(o.finalPrice !== undefined ? o.finalPrice : (o.totalAmount || 0)).toFixed(2);
+        const address = o.address ? `<div style="font-size:0.75rem; color:#9ca3af; margin-top:2px;">📍 ${o.address}</div>` : '';
+        const isDisc = o.isDiscount ? '<span style="font-size:0.68rem; background:#831843; color:#fbcfe8; border:1px solid #be185d; padding:1px 6px; border-radius:6px; font-weight:700;">50% Off</span>' : '';
+        const ts = o.timestamp ? new Date(o.timestamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
+
+        return `
+          <div class="order-hist-card" style="margin-bottom:10px; border-color:#4b5563;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="recent-token" style="font-size:1.05rem; letter-spacing:1px; color:#ef4444; font-weight:800;">${tok}</span>
+                <span style="font-size:0.7rem; font-weight:800; background:#451a03; color:#fcd34d; border:1px solid #d97706; padding:2px 7px; border-radius:8px; text-transform:uppercase;">⏳ Pending</span>
+                ${isDisc}
+              </div>
+              <span style="font-size:0.75rem; color:#9ca3af;">${ts}</span>
+            </div>
+
+            <div style="margin-bottom:6px;">
+              <div style="font-size:0.92rem; font-weight:700; color:#f3f4f6;">
+                👤 ${name} ${phone ? `<span style="font-size:0.8rem; font-weight:normal; color:#9ca3af;">(${phone})</span>` : ''}
+              </div>
+              ${address}
+              <div style="font-size:0.82rem; color:#d1d5db; margin-top:3px; line-height:1.35;">🥟 ${items}</div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #1f2937; padding-top:8px; margin-top:4px;">
+              <div style="font-size:1.15rem; font-weight:800; color:#22c55e;">₹${price}</div>
+              <button type="button" class="btn-check" style="padding:7px 14px; font-size:0.85rem; border-radius:8px; background:#22c55e; border:0; color:#fff; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:5px;" onclick="quickCheckoutOrder('${tok}')">
+                <span>⚡ Quick Checkout</span>
+              </button>
+            </div>
           </div>
-          <div class="recent-right">
-            <div class="recent-price">₹${parseFloat(r.amount).toFixed(2)}</div>
-            <div class="recent-stamp">Visit #${r.visit} &bull; ${r.time || 'Today'}</div>
-          </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
+    }
+
+    function quickCheckoutOrder(token) {
+      if (!token) return;
+      tokenInput.value = token;
+      if (unverifiedOrdersCache && unverifiedOrdersCache[token.toUpperCase()]) {
+        populateAndShowModal(unverifiedOrdersCache[token.toUpperCase()]);
+      } else {
+        checkAndOpenModal(false);
+      }
     }
 
     // ==========================================
@@ -1802,8 +1834,9 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
       }).join('');
     }
 
-    // Auto-load latest 5 orders on boot
-    loadLatestOrders();
+    // Auto-load unverified orders on boot and poll every 4 seconds
+    loadUnverifiedOrders();
+    setInterval(loadUnverifiedOrders, 4000);
   </script>
 </body>
 </html>

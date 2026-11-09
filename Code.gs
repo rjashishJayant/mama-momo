@@ -85,6 +85,48 @@ function doGet(e) {
       return jsonResponse({ success: true, count: list.length, orders: list });
     }
 
+    // Fetch unverified (PENDING) orders only for vendor queue
+    if (action === 'getUnverifiedOrders') {
+      const ordersSheet = ensureSheet_(ss, 'Orders', ORDER_HEADERS);
+      const lastRow = ordersSheet.getLastRow();
+      const list = [];
+      if (lastRow > 1) {
+        const data = ordersSheet.getRange(2, 1, lastRow - 1, 9).getValues();
+        for (let i = data.length - 1; i >= 0; i--) {
+          const rowStatus = String(data[i][8] || 'PENDING').trim().toUpperCase();
+          if (rowStatus === 'PENDING') {
+            const rawDate = data[i][0];
+            let dateStr = '';
+            let timeStr = '';
+            if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+              const y = rawDate.getFullYear();
+              const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+              const d = String(rawDate.getDate()).padStart(2, '0');
+              dateStr = y + '-' + m + '-' + d;
+              timeStr = rawDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            } else if (rawDate) {
+              dateStr = String(rawDate);
+            }
+            list.push({
+              orderId: String(data[i][1] || '').trim().toUpperCase(),
+              phone: normalizePhone(data[i][2]),
+              name: String(data[i][3] || ''),
+              items: String(data[i][4] || ''),
+              itemsDisplay: String(data[i][4] || ''),
+              totalAmount: parseFloat(data[i][5]) || 0,
+              finalPrice: parseFloat(data[i][5]) || 0,
+              visitNumber: parseInt(data[i][6], 10) || 1,
+              discountApplied: String(data[i][7] || 'NO').toUpperCase() === 'YES',
+              status: 'PENDING',
+              time: timeStr,
+              date: dateStr
+            });
+          }
+        }
+      }
+      return jsonResponse({ success: true, count: list.length, orders: list });
+    }
+
     // Fetch all orders with vendor password protection
     if (action === 'getOrders' || action === 'getAllOrders') {
       const pin = String((e && e.parameter && e.parameter.pin) || '').trim();

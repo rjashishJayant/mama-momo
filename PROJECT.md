@@ -39,9 +39,9 @@ mama-momo/
 ├── Code.gs               # Google Apps Script database controller
 ├── PROJECT.md            # System specifications, architecture & test suite
 └── api/
-    ├── index.php         # Screen 1: Mobile-first hero landing card
+    ├── index.php         # Screen 1: Customer Phone Login, Quick Registration & Profile Dashboard
     ├── menu.php          # Screen 2: Interactive menu catalog & dynamic cart
-    ├── checkout.php      # Screen 3: Customer details review & checkout
+    ├── checkout.php      # Screen 3: Pre-authenticated customer checkout (no re-asking name & phone)
     └── confirm.php       # Screen 4: Serverless token generator & order pass (PRG)
 ```
 
@@ -50,11 +50,11 @@ Both `vercel.json` and `.htaccess` mask the internal `/api` directory:
 
 | Public Endpoint | Target Handler | Description |
 | :--- | :--- | :--- |
-| `^/$` | `/api/index.php` | Mobile-first landing card & promotion banner |
+| `^/$` | `/api/index.php` | Customer phone login, registration (with optional delivery address) & profile dashboard |
 | `^/menu/?$` | `/api/menu.php` | Item catalog, +/- quantity controls & live cart bar |
 | `^/checkout/?$` | `/api/checkout.php` | Itemized review, name & 10-digit mobile validation |
 | `^/confirm/?$` | `/api/confirm.php` | Token pass generator & Post-Redirect-Get handler |
-| `^/vendor/?$` | `/vendor.php` | Attendant order verification terminal |
+| `^/vendor/?$` | `/vendor.php` | Attendant order verification terminal (Unverified Queue & Quick Checkout) |
 
 ---
 

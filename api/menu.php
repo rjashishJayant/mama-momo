@@ -17,6 +17,14 @@ if (substr($scriptDir, -4) === '/api' || substr($scriptDir, -4) === '\\api') {
 $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
 $checkoutUrl = ($basePath ?: '') . '/checkout';
 $menuUrl = ($basePath ?: '') . '/menu';
+$homeUrl = ($basePath ?: '') . '/';
+
+// Customer login enforcement: customer must be logged in via phone before ordering
+$customer = $_SESSION['customer'] ?? null;
+if (!$customer && !isset($_GET['format']) && !isset($_GET['action'])) {
+    header('Location: ' . ($homeUrl ?: '/'), true, 303);
+    exit;
+}
 
 $isRefresh = (isset($_GET['refresh']) && $_GET['refresh'] === '1');
 $previewDrafts = (isset($_GET['preview_drafts']) && $_GET['preview_drafts'] === '1') || (isset($_GET['preview']) && $_GET['preview'] === '1') || (isset($_GET['admin']) && $_GET['admin'] === '1');
@@ -391,6 +399,16 @@ foreach ($menuItems as $item) {
   </style>
 </head>
 <body>
+  <?php if ($customer): ?>
+    <div style="max-width: 520px; margin: 0 auto 12px; display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 10px 14px; border-radius: 12px; border: 1px solid #fee2e2; box-shadow: 0 2px 6px rgba(217,56,30,0.06);">
+      <div style="font-size: 0.88rem; color: #374151;">
+        👋 Ordering as <strong><?= htmlspecialchars($customer['name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?></strong>
+        <span style="font-size: 0.8rem; color: #6b7280;">(<?= htmlspecialchars($customer['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?>)</span>
+      </div>
+      <a href="<?= htmlspecialchars($homeUrl ?: '/', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 0.8rem; font-weight: 700; color: #d9381e; text-decoration: none; padding: 5px 10px; background: #fff5f2; border-radius: 8px; border: 1px solid #fecaca;">👤 Profile</a>
+    </div>
+  <?php endif; ?>
+
   <div class="header">
     <div class="header-left">
       <h2>🥟 Mama Momo Menu</h2>

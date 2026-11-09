@@ -1,6 +1,6 @@
 {
-    "updatedAt": 1794156751,
-    "updatedIso": "2026-11-08T16:52:31+00:00",
+    "updatedAt": 1794211080,
+    "updatedIso": "2026-11-09T07:58:00+00:00",
     "items": {
         "1": {
             "id": "1",
@@ -14,19 +14,19 @@
         },
         "2": {
             "id": "2",
-            "name": "Steamed Chicken Momo",
-            "price": 120,
-            "desc": "Juicy minced chicken infused with mild spices",
-            "category": "Steamed Non-Veg",
+            "name": "Crispy Fried Veg Momo",
+            "price": 60,
+            "desc": "Golden fried crunchy veg dumplings with spicy chutney",
+            "category": "Fried Veg",
             "available": true,
             "viewOnMenu": true,
             "status": "published"
         },
         "3": {
             "id": "3",
-            "name": "Crispy Fried Veg Momo",
-            "price": 100,
-            "desc": "Golden fried crunchy veg dumplings with spicy chutney",
+            "name": "Finger \/ Fries",
+            "price": 20,
+            "desc": "crunchy potato fries",
             "category": "Fried Veg",
             "available": true,
             "viewOnMenu": true,
@@ -34,33 +34,23 @@
         },
         "4": {
             "id": "4",
-            "name": "Crispy Fried Chicken Momo",
-            "price": 140,
-            "desc": "Deep fried crisp chicken momos served hot",
-            "category": "Fried Non-Veg",
+            "name": "Veg Roll",
+            "price": 25,
+            "desc": "crunchy veg roll",
+            "category": "Rolls",
             "available": true,
             "viewOnMenu": true,
             "status": "published"
         },
         "5": {
             "id": "5",
-            "name": "Jhol Momo Soup Bowl",
-            "price": 130,
-            "desc": "Steamed momos dipped in spicy sesame-tomato jhol broth",
-            "category": "Specialties",
+            "name": "Panner Roll",
+            "price": 40,
+            "desc": "Crunchy Paneer roll",
+            "category": "Rolls",
             "available": true,
             "viewOnMenu": true,
             "status": "published"
-        },
-        "6": {
-            "id": "6",
-            "name": "Schezwan Paneer Momo",
-            "price": 110,
-            "desc": "Spicy paneer dumplings tossed in fiery schezwan sauce",
-            "category": "Specialties",
-            "available": true,
-            "viewOnMenu": false,
-            "status": "draft"
         }
     }
 }

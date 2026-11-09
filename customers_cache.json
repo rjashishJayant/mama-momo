@@ -1,0 +1,60 @@
+{
+    "9822334455": {
+        "phone": "9822334455",
+        "name": "Vikram Roy",
+        "address": "Shop 4, Market Complex",
+        "createdAt": 1793898123,
+        "updatedAt": 1794210463
+    },
+    "9721127455": {
+        "phone": "9721127455",
+        "name": "JAYANT ASHISH",
+        "address": "",
+        "createdAt": 1793898796,
+        "updatedAt": 1793898796
+    },
+    "9876543210": {
+        "phone": "9876543210",
+        "name": "Ananya Sharma",
+        "address": "Flat 202, Green Valley Apartments",
+        "createdAt": 1794152886,
+        "updatedAt": 1794160267
+    },
+    "9123456780": {
+        "phone": "9123456780",
+        "name": "Test Runner",
+        "address": "Stall Table #3",
+        "updatedAt": 1794210308,
+        "createdAt": 1794210308
+    },
+    "9991112223": {
+        "phone": "9991112223",
+        "name": "Aarav Patel",
+        "address": "Flat 402, Lotus Towers",
+        "updatedAt": 1794210371,
+        "createdAt": 1794210371
+    },
+    "8887776655": {
+        "phone": "8887776655",
+        "name": "Siddharth Roy",
+        "address": "Tower B, Flat 501",
+        "updatedAt": 1794210955,
+        "createdAt": 1794210868
+    },
+    "8887776656": {
+        "phone": "8887776656",
+        "name": "Meera Nair",
+        "address": "",
+        "updatedAt": 1794210955,
+        "createdAt": 1794210868
+    },
+    "9199887766": {
+        "currentVisits": 0,
+        "remainingVisits": 5,
+        "phone": "9199887766",
+        "name": "Priya Sharma",
+        "address": "Table 12, Garden Section",
+        "updatedAt": 1794211034,
+        "createdAt": 1794211010
+    }
+}

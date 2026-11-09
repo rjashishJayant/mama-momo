@@ -210,3 +210,199 @@ function getDynamicMenu(bool $forceRefresh = false, ?array &$meta = null): array
     ];
     return $DEFAULT_MENU_ITEMS;
 }
+
+/**
+ * Normalizes a 10-digit Indian mobile number (stripping +91 or leading 0).
+ */
+function normalizePhoneNumber($phone): string
+{
+    $digits = preg_replace('/\D+/', '', (string)$phone);
+    if (strlen($digits) === 12 && substr($digits, 0, 2) === '91') {
+        $digits = substr($digits, 2);
+    } elseif (strlen($digits) === 11 && substr($digits, 0, 1) === '0') {
+        $digits = substr($digits, 1);
+    }
+    return strlen($digits) === 10 ? $digits : '';
+}
+
+/**
+ * Gets path to customer cache file.
+ */
+function getCustomersCacheFile(): string
+{
+    return dirname(__DIR__) . '/customers_cache.json';
+}
+
+/**
+ * Loads customer cache.
+ */
+function loadCustomersCache(): array
+{
+    $file = getCustomersCacheFile();
+    if (file_exists($file)) {
+        $data = json_decode(@file_get_contents($file), true);
+        if (is_array($data)) return $data;
+    }
+    return [];
+}
+
+/**
+ * Saves customer to cache.
+ */
+function saveCustomerToCache(string $phone, string $name, string $address = '', array $extra = []): array
+{
+    $phone = normalizePhoneNumber($phone);
+    if (!$phone) return [];
+    $cache = loadCustomersCache();
+    $existing = $cache[$phone] ?? [];
+    $record = array_merge($existing, $extra, [
+        'phone' => $phone,
+        'name' => trim($name) ?: ($existing['name'] ?? 'Customer'),
+        'address' => trim($address) ?: ($existing['address'] ?? ''),
+        'updatedAt' => time()
+    ]);
+    if (!isset($record['createdAt'])) {
+        $record['createdAt'] = time();
+    }
+    $cache[$phone] = $record;
+    @file_put_contents(getCustomersCacheFile(), json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    return $record;
+}
+
+/**
+ * Lookup customer by phone, checking local cache and Google Sheets.
+ */
+function findCustomerProfile(string $phone): ?array
+{
+    global $APPS_SCRIPT_URL;
+    $phone = normalizePhoneNumber($phone);
+    if (!$phone) return null;
+
+    $cache = loadCustomersCache();
+    $profile = $cache[$phone] ?? null;
+
+    // Check with Google Apps Script action=checkCustomer
+    if (!empty($APPS_SCRIPT_URL)) {
+        $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=checkCustomer&phone=' . urlencode($phone);
+        $ch = curl_init($gasUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => 4
+        ]);
+        $raw = curl_exec($ch);
+        curl_close($ch);
+
+        if ($raw) {
+            $res = json_decode($raw, true);
+            if (is_array($res) && !empty($res['success']) && !empty($res['found'])) {
+                $name = !empty($res['name']) ? $res['name'] : ($profile['name'] ?? '');
+                $address = $profile['address'] ?? '';
+                $profile = [
+                    'phone' => $phone,
+                    'name' => $name,
+                    'address' => $address,
+                    'currentVisits' => (int)($res['currentVisits'] ?? 0),
+                    'nextVisit' => (int)($res['nextVisit'] ?? 1),
+                    'remainingVisits' => (int)($res['remainingVisits'] ?? 0),
+                    'willGetDiscount' => !empty($res['willGetDiscount']),
+                    'isCooldown' => !empty($res['isCooldown']),
+                    'updatedAt' => time()
+                ];
+                saveCustomerToCache($phone, $name, $address, $profile);
+                return $profile;
+            }
+        }
+    }
+
+    if ($profile) {
+        return $profile;
+    }
+
+    // Check if customer has orders in orders_cache.json
+    $orders = getOrdersByCustomerPhone($phone);
+    if (!empty($orders)) {
+        $first = $orders[0];
+        $profile = [
+            'phone' => $phone,
+            'name' => $first['name'] ?? 'Customer',
+            'address' => '',
+            'currentVisits' => count(array_filter($orders, function($o) {
+                $st = strtoupper($o['status'] ?? '');
+                return $st === 'APPROVED' || $st === 'APPROVED_COOLDOWN';
+            })),
+            'updatedAt' => time()
+        ];
+        saveCustomerToCache($phone, $profile['name'], '', $profile);
+        return $profile;
+    }
+
+    return null;
+}
+
+/**
+ * Get all orders for a customer by phone number.
+ */
+function getOrdersByCustomerPhone(string $phone): array
+{
+    $phone = normalizePhoneNumber($phone);
+    if (!$phone) return [];
+
+    $projCache = dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+    $all = [];
+
+    foreach ([$projCache, $tempCache] as $file) {
+        if (file_exists($file)) {
+            $data = json_decode(@file_get_contents($file), true) ?: [];
+            foreach ($data as $token => $ord) {
+                if (normalizePhoneNumber($ord['phone'] ?? '') === $phone) {
+                    $all[$token] = $ord;
+                }
+            }
+        }
+    }
+
+    $list = array_values($all);
+    usort($list, function($a, $b) {
+        $ta = $a['timestamp'] ?? 0;
+        $tb = $b['timestamp'] ?? 0;
+        return $tb <=> $ta;
+    });
+
+    return $list;
+}
+
+/**
+ * Get all unverified (PENDING) orders for vendor terminal.
+ */
+function getUnverifiedOrders(): array
+{
+    $projCache = dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+    $all = [];
+
+    foreach ([$projCache, $tempCache] as $file) {
+        if (file_exists($file)) {
+            $data = json_decode(@file_get_contents($file), true) ?: [];
+            foreach ($data as $token => $ord) {
+                $st = strtoupper((string)($ord['status'] ?? 'PENDING'));
+                if ($st === 'PENDING' || $st === '' || empty($ord['status'])) {
+                    $all[$token] = $ord;
+                }
+            }
+        }
+    }
+
+    $list = array_values($all);
+    usort($list, function($a, $b) {
+        $ta = $a['timestamp'] ?? 0;
+        $tb = $b['timestamp'] ?? 0;
+        return $tb <=> $ta;
+    });
+
+    return $list;
+}
+

@@ -1,4 +1,10 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
+
+require_once __DIR__ . '/config.php';
+
 $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
 if (substr($scriptDir, -4) === '/api' || substr($scriptDir, -4) === '\\api') {
     $basePath = substr($scriptDir, 0, -4);
@@ -8,13 +14,21 @@ if (substr($scriptDir, -4) === '/api' || substr($scriptDir, -4) === '\\api') {
 $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
 $menuUrl = ($basePath ?: '') . '/menu';
 $confirmUrl = ($basePath ?: '') . '/confirm';
+$homeUrl = ($basePath ?: '') . '/';
+
+$customer = $_SESSION['customer'] ?? null;
+if (!$customer) {
+    // If not logged in, redirect to login page
+    header('Location: ' . ($homeUrl ?: '/'), true, 303);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Checkout - Mama Momo</title>
+  <title>Review &amp; Checkout - Mama Momo</title>
   <!-- Favicon & Touch Icons -->
   <link rel="icon" type="image/svg+xml" href="<?= ($basePath ?: '') ?>/favicon.svg">
   <link rel="alternate icon" type="image/png" sizes="32x32" href="<?= ($basePath ?: '') ?>/favicon-32x32.png">
@@ -72,48 +86,70 @@ $confirmUrl = ($basePath ?: '') . '/confirm';
     }
     .total-row {
       font-weight: 800;
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       border-top: 1px solid #e0e0e0;
       padding-top: 10px;
       margin-top: 10px;
       color: #d9381e;
     }
-    .label {
-      font-size: 0.85rem;
-      font-weight: 700;
-      display: block;
-      margin-top: 16px;
-      color: #444;
+    
+    /* Verified Customer Card */
+    .customer-card {
+      background: #f0fdf4;
+      border: 1.5px solid #bbf7d0;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
     }
-    input[type="text"], input[type="tel"] {
-      width: 100%;
-      padding: 13px 14px;
-      border: 1px solid #ccc;
+    .cust-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #dcfce7;
+      color: #166534;
+      padding: 3px 8px;
       border-radius: 10px;
-      margin-top: 6px;
-      font-size: 1rem;
-      outline: none;
-      transition: border-color 0.2s;
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
     }
-    input[type="text"]:focus, input[type="tel"]:focus {
-      border-color: #d9381e;
+    .cust-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      margin-bottom: 5px;
+    }
+    .cust-row:last-child {
+      margin-bottom: 0;
+    }
+    .cust-label {
+      color: #4b5563;
+      font-weight: 600;
+    }
+    .cust-val {
+      font-weight: 700;
+      color: #111827;
+      text-align: right;
     }
     .note {
       font-size: 0.8rem;
-      color: #777;
-      margin-top: 6px;
-      line-height: 1.3;
+      color: #6b7280;
+      margin-top: 8px;
+      line-height: 1.35;
+      text-align: center;
     }
     .submit-btn {
       width: 100%;
       background: #d9381e;
       color: #fff;
       border: 0;
-      padding: 15px;
-      border-radius: 10px;
-      font-size: 1.05rem;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 1.1rem;
       font-weight: bold;
-      margin-top: 24px;
+      margin-top: 20px;
       cursor: pointer;
       box-shadow: 0 4px 14px rgba(217, 56, 30, 0.35);
       transition: transform 0.1s;
@@ -132,23 +168,41 @@ $confirmUrl = ($basePath ?: '') . '/confirm';
     <a href="<?= htmlspecialchars($menuUrl, ENT_QUOTES, 'UTF-8') ?>" class="back-btn">← Back to Menu</a>
     <h2>Review Order &amp; Details</h2>
 
+    <!-- Verified Customer Identity (Pre-filled, not asked again) -->
+    <div class="customer-card">
+      <div class="cust-badge">✓ Verified Customer Account</div>
+      <div class="cust-row">
+        <span class="cust-label">👤 Name:</span>
+        <span class="cust-val"><?= htmlspecialchars($customer['name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?></span>
+      </div>
+      <div class="cust-row">
+        <span class="cust-label">📱 Mobile:</span>
+        <span class="cust-val"><?= htmlspecialchars($customer['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+      </div>
+      <?php if (!empty($customer['address'])): ?>
+        <div class="cust-row">
+          <span class="cust-label">📍 Delivery Address:</span>
+          <span class="cust-val"><?= htmlspecialchars($customer['address'], ENT_QUOTES, 'UTF-8') ?></span>
+        </div>
+      <?php endif; ?>
+    </div>
+
+    <!-- Itemized Order Summary -->
     <div class="order-summary" id="cartSummary">
-      <!-- Itemized cart summary injected via JS -->
+      <!-- Injected via JS from local cart -->
     </div>
 
     <form action="<?= htmlspecialchars($confirmUrl, ENT_QUOTES, 'UTF-8') ?>" method="POST" id="checkoutForm">
+      <!-- Pre-authenticated customer details submitted without re-asking -->
+      <input type="hidden" name="name" value="<?= htmlspecialchars($customer['name'] ?? 'Customer', ENT_QUOTES, 'UTF-8') ?>">
+      <input type="hidden" name="phone" value="<?= htmlspecialchars($customer['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+      <input type="hidden" name="address" value="<?= htmlspecialchars($customer['address'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
       <input type="hidden" name="cart_items" id="cartItemsInput">
       <input type="hidden" name="cart_json" id="cartJsonInput">
       <input type="hidden" name="total_amount" id="totalAmountInput">
 
-      <label class="label" for="name">Customer Name</label>
-      <input type="text" id="name" name="name" maxlength="80" placeholder="e.g. Rahul Sharma" required autocomplete="name">
-
-      <label class="label" for="phone">10-Digit Mobile Number</label>
-      <input type="tel" id="phone" name="phone" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" placeholder="e.g. 9876543210" required autocomplete="tel">
-      <div class="note">Your mobile number is used to track your loyalty stamps (5th Visit = Flat 50% Off).</div>
-
       <button type="submit" class="submit-btn" id="submitBtn">Generate Order Token</button>
+      <div class="note">A 6-character order token will be generated for stall verification &amp; loyalty stamping.</div>
     </form>
   </div>
 
@@ -185,7 +239,7 @@ $confirmUrl = ($basePath ?: '') . '/confirm';
 
     const totalRow = document.createElement('div');
     totalRow.className = 'total-row';
-    totalRow.innerHTML = `<span>Subtotal</span><span>₹${subtotal}</span>`;
+    totalRow.innerHTML = `<span>Total Payable</span><span>₹${subtotal}</span>`;
     summary.appendChild(totalRow);
 
     document.getElementById('checkoutForm').addEventListener('submit', function (e) {
@@ -196,12 +250,10 @@ $confirmUrl = ($basePath ?: '') . '/confirm';
         return;
       }
 
-      // Serialize cart details into hidden form fields
       document.getElementById('cartItemsInput').value = itemStrings.join(', ');
       document.getElementById('cartJsonInput').value = JSON.stringify(items);
       document.getElementById('totalAmountInput').value = subtotal;
 
-      // Clear localStorage to prevent duplicate submissions
       localStorage.removeItem('mama_cart');
 
       const btn = document.getElementById('submitBtn');
