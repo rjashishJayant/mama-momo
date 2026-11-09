@@ -107,6 +107,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'confirm_order') {
     // 1. Forward confirmation payload to Google Apps Script
     $gasPayload = $data;
     $gasPayload['action'] = 'confirmOrder';
+    $gasPayload['orderId'] = $token;
+    $gasPayload['token'] = $token;
     $ch = curl_init($APPS_SCRIPT_URL);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -124,6 +126,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'confirm_order') {
     $gasData = $rawGas ? json_decode($rawGas, true) : null;
 
     if (is_array($gasData) && !empty($gasData['success'])) {
+        // Invalidate GAS orders cache so terminal updates immediately
+        @unlink(sys_get_temp_dir() . '/mama_momo_gas_orders_cache.json');
+
         // Successfully confirmed in Google Sheets! Update local cache as well.
         if ($token !== '') {
             $visitNum = $gasData['visitNumber'] ?? 1;

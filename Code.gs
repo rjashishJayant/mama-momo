@@ -259,7 +259,7 @@ function doPost(e) {
       return confirmOrder_(data, customers, orders);
     }
     if (action === 'getOrder') {
-      const orderId = String(data.orderId || '').trim().toUpperCase();
+      const orderId = String(data.orderId || data.token || '').trim().toUpperCase();
       const order = findOrder_(orders, orderId);
       if (!order) return jsonResponse({ success: false, found: false, message: 'Order token not found.' });
       return jsonResponse({
@@ -411,7 +411,7 @@ function confirmOrder_(data, customers, orders) {
     return jsonResponse({ success: false, message: 'Invalid vendor PIN.' });
   }
 
-  const orderId = String(data.orderId || '').trim().toUpperCase();
+  const orderId = String(data.orderId || data.token || '').trim().toUpperCase();
   if (!orderId || orderId.length < 4 || orderId.length > 12) {
     return jsonResponse({ success: false, message: 'Invalid order token.' });
   }
