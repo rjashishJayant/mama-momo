@@ -99,6 +99,15 @@ $customer = getAuthenticatedCustomer();
 $customerOrders = [];
 if ($customer && !empty($customer['phone'])) {
     $customerOrders = getOrdersByCustomerPhone($customer['phone']);
+    // Dynamically calculate and sync customer visits from approved orders
+    $approvedVisits = count(array_filter($customerOrders, function($o) {
+        $st = strtoupper($o['status'] ?? '');
+        return $st === 'APPROVED' || $st === 'APPROVED_COOLDOWN' || $st === 'CONFIRMED';
+    }));
+    if ($approvedVisits > (int)($customer['currentVisits'] ?? 0)) {
+        $customer['currentVisits'] = $approvedVisits;
+        setCustomerSessionCookie($customer);
+    }
 }
 ?>
 <!DOCTYPE html>

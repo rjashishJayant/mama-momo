@@ -451,7 +451,7 @@ function getActiveOrder(?string $tokenHint = null): ?array
         return null;
     }
 
-    // Lookup in orders cache
+    // 1. Lookup in local orders caches
     $projCache = dirname(__DIR__) . '/orders_cache.json';
     $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
     foreach ([$projCache, $tempCache] as $file) {
@@ -460,6 +460,56 @@ function getActiveOrder(?string $tokenHint = null): ?array
             if (isset($data[$token]) && is_array($data[$token])) {
                 $_SESSION['active_order'] = $data[$token];
                 return $data[$token];
+            }
+        }
+    }
+
+    // 2. Query Google Apps Script by order token (source-of-truth)
+    global $APPS_SCRIPT_URL;
+    if (!empty($APPS_SCRIPT_URL)) {
+        $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getOrder&orderId=' . urlencode($token);
+        $ch = curl_init($gasUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_TIMEOUT => 6
+        ]);
+        $raw = curl_exec($ch);
+        curl_close($ch);
+
+        if ($raw) {
+            $gasData = json_decode($raw, true);
+            if (is_array($gasData) && (!empty($gasData['found']) || !empty($gasData['success'])) && !empty($gasData['orderId'])) {
+                $ts = is_numeric($gasData['timestamp'] ?? null) 
+                    ? (int)$gasData['timestamp'] 
+                    : (strtotime((string)($gasData['timestamp'] ?? '')) ?: time());
+
+                $ord = [
+                    'orderId' => (string)$gasData['orderId'],
+                    'name' => (string)($gasData['name'] ?? 'Customer'),
+                    'phone' => (string)($gasData['phone'] ?? ''),
+                    'itemsDisplay' => (string)($gasData['itemsDisplay'] ?? ($gasData['items'] ?? 'Momo Selection')),
+                    'totalAmount' => (float)($gasData['totalAmount'] ?? 0),
+                    'finalPrice' => (float)($gasData['finalPrice'] ?? ($gasData['totalAmount'] ?? 0)),
+                    'projectedVisit' => (int)($gasData['visitNumber'] ?? 1),
+                    'currentVisits' => (int)($gasData['currentVisits'] ?? 0),
+                    'remainingVisits' => (int)($gasData['remainingVisits'] ?? 0),
+                    'isDiscount' => !empty($gasData['discountApplied']),
+                    'isCooldown' => !empty($gasData['isCooldown']),
+                    'status' => strtoupper((string)($gasData['status'] ?? 'PENDING')),
+                    'timestamp' => $ts
+                ];
+                $_SESSION['active_order'] = $ord;
+                setActiveOrderCookie($ord);
+
+                // Cache in container temp
+                $cData = file_exists($tempCache) ? (json_decode(@file_get_contents($tempCache), true) ?: []) : [];
+                $cData[$token] = $ord;
+                @file_put_contents($tempCache, json_encode($cData, JSON_UNESCAPED_UNICODE));
+
+                return $ord;
             }
         }
     }
@@ -541,6 +591,104 @@ function findCustomerProfile(string $phone): ?array
 }
 
 /**
+ * Fetches all orders from Google Apps Script with short caching (10 seconds) to avoid rate limits.
+ *
+ * @param bool $forceRefresh Bypass cache if true.
+ * @return array Map of order tokens to order objects.
+ */
+function fetchAllOrdersFromGas(bool $forceRefresh = false): array
+{
+    global $APPS_SCRIPT_URL, $VENDOR_PIN;
+    if (empty($APPS_SCRIPT_URL)) {
+        return [];
+    }
+
+    $tempCache = sys_get_temp_dir() . '/mama_momo_gas_orders_cache.json';
+    $now = time();
+
+    if (!$forceRefresh && file_exists($tempCache)) {
+        $json = @file_get_contents($tempCache);
+        if ($json) {
+            $mtime = @filemtime($tempCache) ?: 0;
+            if (($now - $mtime) < 10) { // 10-second TTL for fast refreshes
+                $decoded = json_decode($json, true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+        }
+    }
+
+    $pin = $VENDOR_PIN ?? '1234';
+    $gasUrl = $APPS_SCRIPT_URL . (strpos($APPS_SCRIPT_URL, '?') === false ? '?' : '&') . 'action=getAllOrders&pin=' . urlencode($pin);
+
+    $ch = curl_init($gasUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_CONNECTTIMEOUT => 4,
+        CURLOPT_TIMEOUT => 6
+    ]);
+    $raw = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$raw) {
+        // Fallback: try reading stale cache if curl timed out
+        if (file_exists($tempCache)) {
+            $decoded = json_decode(@file_get_contents($tempCache), true);
+            if (is_array($decoded)) return $decoded;
+        }
+        return [];
+    }
+
+    $resp = json_decode($raw, true);
+    if (!is_array($resp) || empty($resp['success']) || !isset($resp['orders']) || !is_array($resp['orders'])) {
+        return [];
+    }
+
+    $orderMap = [];
+    foreach ($resp['orders'] as $ord) {
+        if (!is_array($ord) || empty($ord['orderId'])) continue;
+        $tok = strtoupper(trim((string)$ord['orderId']));
+
+        // Normalize timestamp
+        $ts = is_numeric($ord['timestamp'] ?? null)
+            ? (int)$ord['timestamp']
+            : (strtotime((string)($ord['timestamp'] ?? '')) ?: $now);
+
+        $orderMap[$tok] = [
+            'orderId' => $tok,
+            'name' => (string)($ord['name'] ?? 'Customer'),
+            'phone' => normalizePhoneNumber((string)($ord['phone'] ?? '')),
+            'items' => (string)($ord['items'] ?? ''),
+            'itemsDisplay' => (string)($ord['itemsDisplay'] ?? ($ord['items'] ?? 'Momo Selection')),
+            'totalAmount' => (float)($ord['totalAmount'] ?? 0),
+            'finalPrice' => (float)($ord['finalPrice'] ?? ($ord['totalAmount'] ?? 0)),
+            'visitNumber' => (int)($ord['visitNumber'] ?? 1),
+            'discountApplied' => !empty($ord['discountApplied']),
+            'status' => strtoupper((string)($ord['status'] ?? 'PENDING')),
+            'timestamp' => $ts,
+            'date' => (string)($ord['date'] ?? date('Y-m-d', $ts)),
+            'time' => (string)($ord['time'] ?? date('h:i A', $ts))
+        ];
+    }
+
+    // Save to temp cache
+    @file_put_contents($tempCache, json_encode($orderMap, JSON_UNESCAPED_UNICODE));
+
+    // Also merge into persistent container order cache
+    $containerCacheFile = sys_get_temp_dir() . '/mama_momo_orders.json';
+    $cData = file_exists($containerCacheFile) ? (json_decode(@file_get_contents($containerCacheFile), true) ?: []) : [];
+    foreach ($orderMap as $k => $v) {
+        $cData[$k] = $v;
+    }
+    @file_put_contents($containerCacheFile, json_encode($cData, JSON_UNESCAPED_UNICODE));
+
+    return $orderMap;
+}
+
+/**
  * Get all orders for a customer by phone number.
  */
 function getOrdersByCustomerPhone(string $phone): array
@@ -552,6 +700,7 @@ function getOrdersByCustomerPhone(string $phone): array
     $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
     $all = [];
 
+    // 1. Gather from local disk caches
     foreach ([$projCache, $tempCache] as $file) {
         if (file_exists($file)) {
             $data = json_decode(@file_get_contents($file), true) ?: [];
@@ -560,6 +709,14 @@ function getOrdersByCustomerPhone(string $phone): array
                     $all[$token] = $ord;
                 }
             }
+        }
+    }
+
+    // 2. Query Google Apps Script source of truth
+    $gasOrders = fetchAllOrdersFromGas();
+    foreach ($gasOrders as $token => $ord) {
+        if (normalizePhoneNumber($ord['phone'] ?? '') === $phone) {
+            $all[$token] = $ord;
         }
     }
 
@@ -582,6 +739,7 @@ function getUnverifiedOrders(): array
     $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
     $all = [];
 
+    // 1. Local disk caches
     foreach ([$projCache, $tempCache] as $file) {
         if (file_exists($file)) {
             $data = json_decode(@file_get_contents($file), true) ?: [];
@@ -591,6 +749,15 @@ function getUnverifiedOrders(): array
                     $all[$token] = $ord;
                 }
             }
+        }
+    }
+
+    // 2. Query Google Apps Script source of truth
+    $gasOrders = fetchAllOrdersFromGas();
+    foreach ($gasOrders as $token => $ord) {
+        $st = strtoupper((string)($ord['status'] ?? 'PENDING'));
+        if ($st === 'PENDING' || $st === '' || empty($ord['status'])) {
+            $all[$token] = $ord;
         }
     }
 

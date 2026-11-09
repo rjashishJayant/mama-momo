@@ -1488,6 +1488,7 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
       if (!unverifiedListEl) return;
       try {
         const res = await fetch(`${VENDOR_ENDPOINT}?action=get_unverified_orders`);
+        if (!res.ok) return;
         const data = await res.json();
         const orders = (data && data.orders) ? data.orders : [];
         renderUnverifiedOrdersList(orders);

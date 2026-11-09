@@ -254,10 +254,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // GET request (e.g. page refreshed) -> restore confirmed order from session, cookie, or token
     $tokenParam = strtoupper(trim((string)($_GET['token'] ?? ($_COOKIE['mama_active_order_token'] ?? ''))));
     $order = getActiveOrder($tokenParam);
-    if ($order && (time() - ($order['timestamp'] ?? 0) < 7200)) {
+    if ($order && (time() - ($order['timestamp'] ?? 0) < 86400)) {
         $result = $order;
         $cartItems = $result['itemsDisplay'] ?? '';
         $totalAmount = $result['totalAmount'] ?? 0;
+        // Keep active order cookie fresh
+        setActiveOrderCookie($order);
     } else {
         header('Location: ' . $menuUrl, true, 303);
         exit;
