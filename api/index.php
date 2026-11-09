@@ -399,11 +399,350 @@ if ($customer && !empty($customer['phone'])) {
       font-weight: 600;
       text-align: left;
     }
+
+    /* Brand Logo */
+    .brand-logo-container {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .brand-logo {
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      object-fit: cover;
+      box-shadow: 0 8px 24px rgba(217, 56, 30, 0.25);
+      border: 3.5px solid #ff7a59;
+      display: inline-block;
+      animation: floatLogo 3.2s infinite ease-in-out;
+    }
+    @keyframes floatLogo {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    /* Intro Video Screen Overlay */
+    .intro-video-overlay {
+      position: fixed;
+      inset: 0;
+      background: #090a0f;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
+      opacity: 1;
+      visibility: visible;
+      padding: 14px;
+    }
+    .intro-video-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .intro-modal {
+      width: 100%;
+      max-width: 440px;
+      background: #111827;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      border: 1px solid #374151;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .intro-header {
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1f2937;
+      border-bottom: 1px solid #374151;
+    }
+    .intro-brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .intro-mini-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #ef4444;
+    }
+    .intro-title {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #f3f4f6;
+    }
+    .btn-skip-top {
+      background: #ef4444;
+      color: #ffffff;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.15s, transform 0.1s;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+    }
+    .btn-skip-top:hover {
+      background: #dc2626;
+      transform: scale(1.02);
+    }
+    .intro-video-box {
+      position: relative;
+      background: #000;
+      width: 100%;
+      line-height: 0;
+      aspect-ratio: 9 / 16;
+      max-height: 520px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .intro-video-element {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+    .intro-video-controls {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+    .btn-video-ctrl {
+      pointer-events: auto;
+      background: rgba(17, 24, 39, 0.82);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .btn-video-ctrl:hover {
+      background: rgba(17, 24, 39, 0.95);
+    }
+    .intro-footer {
+      padding: 14px 16px;
+      background: #111827;
+      text-align: center;
+    }
+    .btn-skip-main {
+      width: 100%;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: #ffffff;
+      border: none;
+      padding: 13px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+      transition: transform 0.12s, box-shadow 0.12s;
+    }
+    .btn-skip-main:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
+    }
+    .btn-skip-main:active {
+      transform: scale(0.98);
+    }
+
+    /* Watch Intro Button on Home */
+    .btn-watch-intro {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: transparent;
+      border: 1px solid #fca5a5;
+      color: #dc2626;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-watch-intro:hover {
+      background: #fee2e2;
+      border-color: #ef4444;
+    }
+
+    /* Momo Animated Loader Overlay */
+    .momo-loader-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+    .momo-loader-card {
+      background: #5B0E0A;
+      border: 2px solid #ff7a59;
+      border-radius: 24px;
+      padding: 24px 28px;
+      max-width: 320px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 122, 89, 0.2);
+      animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .momo-loader-mascot-wrap {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+    .momo-loader-mascot {
+      width: 130px;
+      height: auto;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+      animation: momoBounce 1.6s infinite ease-in-out;
+      display: block;
+    }
+    @keyframes momoBounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-7px) scale(1.04); }
+    }
+    .momo-loader-ring {
+      position: absolute;
+      inset: -6px;
+      border: 3px solid transparent;
+      border-top-color: #fbbf24;
+      border-right-color: #fbbf24;
+      border-radius: 20px;
+      animation: spinRing 1.2s linear infinite;
+    }
+    @keyframes spinRing {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .momo-loader-title {
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: #ffffff;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .momo-loader-text {
+      font-size: 0.85rem;
+      color: #ffd8d3;
+      margin-bottom: 12px;
+      font-weight: 600;
+      min-height: 20px;
+    }
+    .momo-loader-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+    .momo-loader-dots span {
+      width: 7px;
+      height: 7px;
+      background: #ff7a59;
+      border-radius: 50%;
+      animation: dotPulse 1.2s infinite ease-in-out;
+    }
+    .momo-loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .momo-loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.3); }
+    }
   </style>
 </head>
 <body>
+  <!-- Momo Animated Loader Overlay (Used during async actions) -->
+  <div id="momoLoaderOverlay" class="momo-loader-overlay" style="display: none;">
+    <div class="momo-loader-card">
+      <div class="momo-loader-mascot-wrap">
+        <img src="<?= ($basePath ?: '') ?>/assets/loader-momo.png" alt="Loading Mama Momo" class="momo-loader-mascot" />
+        <div class="momo-loader-ring"></div>
+      </div>
+      <div class="momo-loader-title">Mama Momo</div>
+      <div class="momo-loader-text" id="momoLoaderText">Steaming up delicious moments…</div>
+      <div class="momo-loader-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Intro Video Screen Overlay -->
+  <div id="introVideoOverlay" class="intro-video-overlay" style="display: none;">
+    <div class="intro-modal">
+      <div class="intro-header">
+        <div class="intro-brand-row">
+          <img src="<?= ($basePath ?: '') ?>/assets/mama-momo-logo.jpg" alt="Mama Momo" class="intro-mini-logo" />
+          <span class="intro-title">Mama Momo</span>
+        </div>
+        <button type="button" class="btn-skip-top" onclick="dismissIntroVideo()">
+          Skip &amp; Use App ➔
+        </button>
+      </div>
+
+      <div class="intro-video-box">
+        <video id="introVideoPlayer" class="intro-video-element" playsinline autoplay muted preload="auto">
+          <source src="<?= ($basePath ?: '') ?>/assets/mama-momo-intro.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+        <div class="intro-video-controls">
+          <button type="button" class="btn-video-ctrl" id="btnSoundToggle" onclick="toggleIntroSound()">
+            <span id="soundIcon">🔇</span> <span id="soundLabel">Sound Off</span>
+          </button>
+          <button type="button" class="btn-video-ctrl" id="btnPlayToggle" onclick="toggleIntroPlay()">
+            <span id="playIcon">⏸️</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="intro-footer">
+        <button type="button" class="btn-skip-main" onclick="dismissIntroVideo()">
+          🥟 Skip &amp; Use the App ➔
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="hero-card">
-    <div class="emoji-logo">🥟</div>
+    <div class="brand-logo-container">
+      <img src="<?= ($basePath ?: '') ?>/assets/mama-momo-logo.jpg" alt="Mama Momo Logo" class="brand-logo" />
+    </div>
     <h1>Mama Momo</h1> 
     <p class="tagline">Hot &amp; authentic Himalayan street-style momos freshly steamed &amp; fried daily.</p>
     
@@ -543,7 +882,13 @@ if ($customer && !empty($customer['phone'])) {
 
     <?php endif; ?>
 
-    <div style="margin-top: 20px; font-size: 0.78rem; color: #999; text-align:center;">
+    <div style="text-align: center; margin-top: 14px;">
+      <button type="button" class="btn-watch-intro" onclick="openIntroVideo(true)">
+        🎬 Watch Intro Video
+      </button>
+    </div>
+
+    <div style="margin-top: 18px; font-size: 0.78rem; color: #999; text-align:center;">
       Loyalty rewards tracked automatically with your mobile number.
     </div>
   </div>
@@ -559,6 +904,97 @@ if ($customer && !empty($customer['phone'])) {
     const regAddress = document.getElementById('regAddress');
     const btnLoginSubmit = document.getElementById('btnLoginSubmit');
     const btnRegisterSubmit = document.getElementById('btnRegisterSubmit');
+    const btnPlaceOrder = document.getElementById('btnPlaceOrder');
+
+    // Momo Animated Loader Controls
+    function showLoader(msg) {
+      const overlay = document.getElementById('momoLoaderOverlay');
+      const text = document.getElementById('momoLoaderText');
+      if (text && msg) text.textContent = msg;
+      if (overlay) overlay.style.display = 'flex';
+    }
+
+    function hideLoader() {
+      const overlay = document.getElementById('momoLoaderOverlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
+    if (btnPlaceOrder) {
+      btnPlaceOrder.addEventListener('click', () => {
+        showLoader('Opening delicious menu…');
+      });
+    }
+
+    // Intro Video Logic
+    const introOverlay = document.getElementById('introVideoOverlay');
+    const introVideo = document.getElementById('introVideoPlayer');
+    const soundIcon = document.getElementById('soundIcon');
+    const soundLabel = document.getElementById('soundLabel');
+    const playIcon = document.getElementById('playIcon');
+
+    function openIntroVideo(manual) {
+      if (!introOverlay || !introVideo) return;
+      introOverlay.style.display = 'flex';
+      introOverlay.classList.remove('hidden');
+      introVideo.currentTime = 0;
+      if (manual) {
+        introVideo.muted = false;
+        if (soundIcon) soundIcon.textContent = '🔊';
+        if (soundLabel) soundLabel.textContent = 'Sound On';
+      }
+      introVideo.play().catch(() => {});
+      if (playIcon) playIcon.textContent = '⏸️';
+    }
+
+    function dismissIntroVideo() {
+      if (!introOverlay) return;
+      if (introVideo) {
+        try { introVideo.pause(); } catch (_) {}
+      }
+      introOverlay.classList.add('hidden');
+      setTimeout(() => {
+        introOverlay.style.display = 'none';
+      }, 350);
+      try {
+        sessionStorage.setItem('mama_intro_seen', '1');
+      } catch (_) {}
+    }
+
+    function toggleIntroSound() {
+      if (!introVideo) return;
+      introVideo.muted = !introVideo.muted;
+      if (soundIcon) soundIcon.textContent = introVideo.muted ? '🔇' : '🔊';
+      if (soundLabel) soundLabel.textContent = introVideo.muted ? 'Sound Off' : 'Sound On';
+    }
+
+    function toggleIntroPlay() {
+      if (!introVideo) return;
+      if (introVideo.paused) {
+        introVideo.play().catch(() => {});
+        if (playIcon) playIcon.textContent = '⏸️';
+      } else {
+        introVideo.pause();
+        if (playIcon) playIcon.textContent = '▶️';
+      }
+    }
+
+    if (introVideo) {
+      introVideo.addEventListener('ended', dismissIntroVideo);
+    }
+
+    // Auto-launch intro video on fresh visit
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const forceIntro = urlParams.get('intro') === '1';
+      let seen = false;
+      try {
+        seen = sessionStorage.getItem('mama_intro_seen') === '1';
+      } catch (_) {}
+
+      if (!seen || forceIntro) {
+        openIntroVideo(false);
+      }
+    });
 
     function showError(msg) {
       if (!errorBanner) return;
@@ -594,6 +1030,7 @@ if ($customer && !empty($customer['phone'])) {
 
       btnLoginSubmit.disabled = true;
       btnLoginSubmit.textContent = 'Checking…';
+      showLoader('Finding your account & loyalty stamps…');
 
       try {
         const res = await fetch(`${basePath}/?action=check_phone&phone=${encodeURIComponent(phone)}`);
@@ -606,8 +1043,10 @@ if ($customer && !empty($customer['phone'])) {
               localStorage.setItem('mama_customer', JSON.stringify(data.profile));
             } catch (_) {}
             window.location.reload();
+            return;
           } else {
             // Customer does not exist -> show registration form
+            hideLoader();
             loginStep.style.display = 'none';
             registerStep.style.display = 'block';
             regPhone.value = phone;
@@ -616,9 +1055,11 @@ if ($customer && !empty($customer['phone'])) {
             }
           }
         } else {
+          hideLoader();
           showError((data && data.message) ? data.message : 'Error checking phone number. Please retry.');
         }
       } catch (err) {
+        hideLoader();
         showError('Could not connect to server. Please check connection.');
       } finally {
         btnLoginSubmit.disabled = false;
@@ -644,6 +1085,7 @@ if ($customer && !empty($customer['phone'])) {
 
       btnRegisterSubmit.disabled = true;
       btnRegisterSubmit.textContent = 'Creating Account…';
+      showLoader('Setting up your Mama Momo profile…');
 
       const formData = new FormData();
       formData.append('action', 'register');
@@ -664,10 +1106,13 @@ if ($customer && !empty($customer['phone'])) {
             localStorage.setItem('mama_customer', JSON.stringify(data.profile));
           } catch (_) {}
           window.location.reload();
+          return;
         } else {
+          hideLoader();
           showError((data && data.message) ? data.message : 'Registration failed. Please retry.');
         }
       } catch (err) {
+        hideLoader();
         showError('Could not complete registration. Please check connection.');
       } finally {
         btnRegisterSubmit.disabled = false;

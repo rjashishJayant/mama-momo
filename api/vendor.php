@@ -890,7 +890,9 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
   <!-- Vendor Page Entry Security Gate Screen -->
   <div id="vendorGateScreen" class="vendor-gate-wrapper">
     <div class="terminal-card" style="max-width: 420px; text-align: center; margin: 0 auto;">
-      <div style="font-size: 3rem; margin-bottom: 8px;">🔐</div>
+      <div style="text-align: center; margin-bottom: 12px;">
+        <img src="<?= ($basePath ?: '') ?>/assets/mama-momo-logo.jpg" alt="Mama Momo Logo" style="width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 3px solid #ef4444; box-shadow: 0 6px 18px rgba(239, 68, 68, 0.35);" />
+      </div>
       <h2 style="font-size: 1.5rem; color: #ef4444; margin-bottom: 6px;">Vendor Access Protected</h2>
       <p class="subtitle" style="margin-bottom: 20px;">
         Enter your Stall Vendor PIN to access the attendant dashboard and confirm orders.
@@ -907,7 +909,10 @@ $basePath = rtrim(str_replace('\\', '/', $basePath), '/');
   <!-- Main Vendor Terminal (Protected) -->
   <div id="vendorTerminalContent" style="display: none; width: 100%; max-width: 480px; margin: 0 auto;">
     <div class="terminal-card">
-      <h2>🥟 Mama Momo Terminal</h2>
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+        <img src="<?= ($basePath ?: '') ?>/assets/mama-momo-logo.jpg" alt="Mama Momo Logo" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2.5px solid #ef4444;" />
+        <h2 style="margin: 0; font-size: 1.45rem;">Mama Momo Terminal</h2>
+      </div>
       <p class="subtitle">Stall Attendant Order Verification &amp; Loyalty Logger</p>
 
       <!-- Google Sheet Menu Sync Bar & Action Buttons -->

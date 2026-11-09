@@ -689,6 +689,10 @@ if (!empty($result['status']) && ($result['status'] === 'APPROVED' || $result['s
       </div>
     <?php endif; ?>
 
+    <div style="text-align: center; margin-bottom: 10px;">
+      <img src="<?= ($basePath ?: '') ?>/assets/mama-momo-logo.jpg" alt="Mama Momo" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2.5px solid #ef4444; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);" />
+    </div>
+
     <div class="token-label">Order Token</div>
     <div class="order-token"><?= $orderId ?></div>
 
@@ -738,6 +742,10 @@ if (!empty($result['status']) && ($result['status'] === 'APPROVED' || $result['s
   <div class="thankyou-card" id="thankYouCard" style="<?= $isAlreadyConfirmed ? 'display: block;' : 'display: none;' ?>">
     <div class="success-ring">
       <span class="checkmark">✓</span>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 10px;">
+      <img src="<?= ($basePath ?: '') ?>/assets/mama-momo-logo.jpg" alt="Mama Momo" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2.5px solid #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);" />
     </div>
 
     <h1 class="thankyou-title">Thank You, <?= $displayName ?>!</h1>

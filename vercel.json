@@ -6,7 +6,7 @@
   },
   "routes": [
     {
-      "src": "^/(favicon.*|apple-touch-icon.*|qrcode.*|mama_momo_qr.*|qr-card\\.html)$",
+      "src": "^/(assets/.*|favicon.*|apple-touch-icon.*|qrcode.*|mama_momo_qr.*|qr-card\\.html)$",
       "dest": "/$1"
     },
     {

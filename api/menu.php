@@ -396,9 +396,116 @@ foreach ($menuItems as $item) {
     .checkout-btn:active {
       transform: scale(0.97);
     }
+
+    /* Momo Animated Loader Overlay */
+    .momo-loader-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+    .momo-loader-card {
+      background: #5B0E0A;
+      border: 2px solid #ff7a59;
+      border-radius: 24px;
+      padding: 24px 28px;
+      max-width: 320px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 122, 89, 0.2);
+      animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .momo-loader-mascot-wrap {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+    .momo-loader-mascot {
+      width: 130px;
+      height: auto;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+      animation: momoBounce 1.6s infinite ease-in-out;
+      display: block;
+    }
+    @keyframes momoBounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-7px) scale(1.04); }
+    }
+    .momo-loader-ring {
+      position: absolute;
+      inset: -6px;
+      border: 3px solid transparent;
+      border-top-color: #fbbf24;
+      border-right-color: #fbbf24;
+      border-radius: 20px;
+      animation: spinRing 1.2s linear infinite;
+    }
+    @keyframes spinRing {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .momo-loader-title {
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: #ffffff;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .momo-loader-text {
+      font-size: 0.85rem;
+      color: #ffd8d3;
+      margin-bottom: 12px;
+      font-weight: 600;
+      min-height: 20px;
+    }
+    .momo-loader-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+    .momo-loader-dots span {
+      width: 7px;
+      height: 7px;
+      background: #ff7a59;
+      border-radius: 50%;
+      animation: dotPulse 1.2s infinite ease-in-out;
+    }
+    .momo-loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .momo-loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.3); }
+    }
   </style>
 </head>
 <body>
+  <!-- Momo Animated Loader Overlay -->
+  <div id="momoLoaderOverlay" class="momo-loader-overlay" style="display: none;">
+    <div class="momo-loader-card">
+      <div class="momo-loader-mascot-wrap">
+        <img src="<?= ($basePath ?: '') ?>/assets/loader-momo.png" alt="Loading Mama Momo" class="momo-loader-mascot" />
+        <div class="momo-loader-ring"></div>
+      </div>
+      <div class="momo-loader-title">Mama Momo</div>
+      <div class="momo-loader-text" id="momoLoaderText">Steaming up your cart…</div>
+      <div class="momo-loader-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
   <?php if ($customer): ?>
     <div style="max-width: 520px; margin: 0 auto 12px; display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 10px 14px; border-radius: 12px; border: 1px solid #fee2e2; box-shadow: 0 2px 6px rgba(217,56,30,0.06);">
       <div style="font-size: 0.88rem; color: #374151;">
@@ -411,7 +518,10 @@ foreach ($menuItems as $item) {
 
   <div class="header">
     <div class="header-left">
-      <h2>🥟 Mama Momo Menu</h2>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <img src="<?= ($basePath ?: '') ?>/assets/mama-momo-logo.jpg" alt="Mama Momo Logo" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2.5px solid #ef4444; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);" />
+        <h2>Mama Momo Menu</h2>
+      </div>
       <div class="sync-status-row">
         <!-- <span class="sync-indicator">
           <span class="sync-dot"></span>
@@ -605,6 +715,13 @@ foreach ($menuItems as $item) {
       });
     }
 
+    function showLoader(msg) {
+      const overlay = document.getElementById('momoLoaderOverlay');
+      const text = document.getElementById('momoLoaderText');
+      if (text && msg) text.textContent = msg;
+      if (overlay) overlay.style.display = 'flex';
+    }
+
     function goToCheckout() {
       cleanCart();
       const count = Object.values(cart).reduce((sum, line) => sum + line.qty, 0);
@@ -612,6 +729,7 @@ foreach ($menuItems as $item) {
         alert('Please add at least 1 plate of momos to proceed!');
         return;
       }
+      showLoader('Preparing your cart & loyalty discount…');
       window.location.href = checkoutUrl;
     }
 
