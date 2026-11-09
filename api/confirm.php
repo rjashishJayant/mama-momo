@@ -20,6 +20,8 @@ $confirmUrl = ($basePath ?: '') . '/confirm';
 // Handle clear order request (e.g. when user clicks Place Another Order)
 if (isset($_GET['clear']) && $_GET['clear'] === '1') {
     unset($_SESSION['active_order']);
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+    @setcookie('mama_active_order_token', '', ['expires' => time() - 3600, 'path' => '/', 'secure' => $isHttps]);
     header('Location: ' . $menuUrl, true, 303);
     exit;
 }
@@ -27,7 +29,7 @@ if (isset($_GET['clear']) && $_GET['clear'] === '1') {
 // Background status polling for live order confirmation by vendor
 if (isset($_GET['action']) && $_GET['action'] === 'check_status') {
     header('Content-Type: application/json; charset=utf-8');
-    $token = strtoupper(trim((string)($_GET['token'] ?? ($_SESSION['active_order']['orderId'] ?? ''))));
+    $token = strtoupper(trim((string)($_GET['token'] ?? ($_COOKIE['mama_active_order_token'] ?? ($_SESSION['active_order']['orderId'] ?? '')))));
     if ($token === '') {
         echo json_encode(['success' => false, 'confirmed' => false, 'status' => 'UNKNOWN']);
         exit;
@@ -224,9 +226,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Also ensure customer profile exists in cache
         saveCustomerToCache($phone, $name, $orderAddress);
 
-        // Cache order by token for instant vendor terminal lookup
+        // Cache order by token for instant vendor terminal lookup & cross-container rendering
         try {
             $cachedData = $_SESSION['active_order'];
+            setActiveOrderCookie($cachedData);
+
             // 1. Project directory cache
             $projCache = dirname(__DIR__) . '/orders_cache.json';
             $cachedP = file_exists($projCache) ? (json_decode(@file_get_contents($projCache), true) ?: []) : [];
@@ -240,16 +244,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @file_put_contents($tempCache, json_encode($cachedT, JSON_UNESCAPED_UNICODE));
         } catch (\Throwable $e) {}
 
-        // Post-Redirect-Get (PRG) pattern so browser reload does not resubmit POST
-        header('Location: ' . $confirmUrl, true, 303);
+        // Post-Redirect-Get (PRG) pattern with token query param so cross-container GET works reliably
+        $orderToken = (string)($result['orderId'] ?? '');
+        $redirectUrl = $confirmUrl . ($orderToken !== '' ? '?token=' . urlencode($orderToken) : '');
+        header('Location: ' . $redirectUrl, true, 303);
         exit;
     }
 } else {
-    // GET request (e.g. page refreshed) -> restore confirmed order from session
-    if (!empty($_SESSION['active_order']) && (time() - ($_SESSION['active_order']['timestamp'] ?? 0) < 7200)) {
-        $result = $_SESSION['active_order'];
-        $cartItems = $result['itemsDisplay'];
-        $totalAmount = $result['totalAmount'];
+    // GET request (e.g. page refreshed) -> restore confirmed order from session, cookie, or token
+    $tokenParam = strtoupper(trim((string)($_GET['token'] ?? ($_COOKIE['mama_active_order_token'] ?? ''))));
+    $order = getActiveOrder($tokenParam);
+    if ($order && (time() - ($order['timestamp'] ?? 0) < 7200)) {
+        $result = $order;
+        $cartItems = $result['itemsDisplay'] ?? '';
+        $totalAmount = $result['totalAmount'] ?? 0;
     } else {
         header('Location: ' . $menuUrl, true, 303);
         exit;

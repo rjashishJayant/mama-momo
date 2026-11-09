@@ -17,7 +17,7 @@ $homeUrl = ($basePath ?: '') . '/';
 
 // Handle Logout
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
-    unset($_SESSION['customer']);
+    clearCustomerSession();
     header('Location: ' . ($homeUrl ?: '/'), true, 303);
     exit;
 }
@@ -33,7 +33,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'check_phone') {
 
     $profile = findCustomerProfile($phone);
     if ($profile) {
-        $_SESSION['customer'] = $profile;
+        setCustomerSessionCookie($profile);
         echo json_encode([
             'success' => true,
             'exists' => true,
@@ -65,7 +65,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'register') {
         'currentVisits' => 0,
         'remainingVisits' => 5
     ]);
-    $_SESSION['customer'] = $profile;
+    setCustomerSessionCookie($profile);
 
     echo json_encode([
         'success' => true,
@@ -86,7 +86,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'login') {
 
     $profile = findCustomerProfile($phone);
     if ($profile) {
-        $_SESSION['customer'] = $profile;
+        setCustomerSessionCookie($profile);
         echo json_encode(['success' => true, 'profile' => $profile]);
     } else {
         echo json_encode(['success' => false, 'message' => 'Customer profile not found. Please register.']);
@@ -94,8 +94,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'login') {
     exit;
 }
 
-// Check if customer is currently logged in
-$customer = $_SESSION['customer'] ?? null;
+// Check if customer is currently logged in (supports stateless signed cookie for Vercel)
+$customer = getAuthenticatedCustomer();
 $customerOrders = [];
 if ($customer && !empty($customer['phone'])) {
     $customerOrders = getOrdersByCustomerPhone($customer['phone']);
@@ -669,7 +669,7 @@ if ($customer && !empty($customer['phone'])) {
     // Auto-sync customer to localStorage if logged in
     <?php if ($customer): ?>
       try {
-        localStorage.setItem('mama_customer', <?= json_encode($customer, JSON_UNESCAPED_UNICODE) ?>);
+        localStorage.setItem('mama_customer', JSON.stringify(<?= json_encode($customer, JSON_UNESCAPED_UNICODE) ?>));
       } catch (_) {}
     <?php else: ?>
       // Auto-prefill phone from localStorage if customer had logged in previously

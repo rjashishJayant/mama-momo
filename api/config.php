@@ -238,6 +238,9 @@ function normalizePhoneNumber($phone): string
     return strlen($digits) === 10 ? $digits : '';
 }
 
+// Master Session Signing Secret for Stateless Serverless Authentication
+$SESSION_SECRET = getenv('SESSION_SECRET') ?: 'mama_momo_2026_secure_session_salt_77';
+
 /**
  * Gets path to customer cache file.
  */
@@ -247,20 +250,28 @@ function getCustomersCacheFile(): string
 }
 
 /**
- * Loads customer cache.
+ * Loads customer cache from project directory and system temp directory.
  */
 function loadCustomersCache(): array
 {
-    $file = getCustomersCacheFile();
-    if (file_exists($file)) {
-        $data = json_decode(@file_get_contents($file), true);
-        if (is_array($data)) return $data;
+    $projCache = dirname(__DIR__) . '/customers_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_customers.json';
+    $cache = [];
+    foreach ([$projCache, $tempCache] as $file) {
+        if (file_exists($file)) {
+            $data = json_decode(@file_get_contents($file), true);
+            if (is_array($data)) {
+                foreach ($data as $k => $v) {
+                    $cache[(string)$k] = $v;
+                }
+            }
+        }
     }
-    return [];
+    return $cache;
 }
 
 /**
- * Saves customer to cache.
+ * Saves customer to cache in both project directory and system temp directory.
  */
 function saveCustomerToCache(string $phone, string $name, string $address = '', array $extra = []): array
 {
@@ -278,8 +289,182 @@ function saveCustomerToCache(string $phone, string $name, string $address = '', 
         $record['createdAt'] = time();
     }
     $cache[$phone] = $record;
-    @file_put_contents(getCustomersCacheFile(), json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    $encoded = json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $projCache = dirname(__DIR__) . '/customers_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_customers.json';
+    @file_put_contents($projCache, $encoded);
+    @file_put_contents($tempCache, $encoded);
     return $record;
+}
+
+/**
+ * Sets a cryptographically signed cookie with customer profile data.
+ * Guarantees seamless session persistence across stateless Vercel lambda containers.
+ */
+function setCustomerSessionCookie(array $customerProfile): void
+{
+    global $SESSION_SECRET;
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+    $_SESSION['customer'] = $customerProfile;
+
+    $payload = base64_encode(json_encode($customerProfile, JSON_UNESCAPED_UNICODE));
+    $sig = hash_hmac('sha256', $payload, $SESSION_SECRET);
+    $token = $payload . '.' . $sig;
+
+    $expires = time() + (86400 * 30); // 30 days
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+    @setcookie('mama_cust_auth', $token, [
+        'expires' => $expires,
+        'path' => '/',
+        'secure' => $isHttps,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+
+    @setcookie('mama_cust_phone', $customerProfile['phone'] ?? '', [
+        'expires' => $expires,
+        'path' => '/',
+        'secure' => $isHttps,
+        'httponly' => false,
+        'samesite' => 'Lax'
+    ]);
+}
+
+/**
+ * Retrieves and validates the authenticated customer across serverless requests.
+ */
+function getAuthenticatedCustomer(): ?array
+{
+    global $SESSION_SECRET;
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+
+    // 1. Check PHP session first
+    if (!empty($_SESSION['customer']) && is_array($_SESSION['customer']) && !empty($_SESSION['customer']['phone'])) {
+        return $_SESSION['customer'];
+    }
+
+    // 2. Validate signed cookie (vital for Vercel lambdas)
+    $cookieToken = $_COOKIE['mama_cust_auth'] ?? '';
+    if ($cookieToken !== '' && strpos($cookieToken, '.') !== false) {
+        list($payload, $sig) = explode('.', $cookieToken, 2);
+        $expectedSig = hash_hmac('sha256', $payload, $SESSION_SECRET);
+        if (hash_equals($expectedSig, $sig)) {
+            $decoded = json_decode(base64_decode($payload), true);
+            if (is_array($decoded) && !empty($decoded['phone'])) {
+                $_SESSION['customer'] = $decoded;
+                return $decoded;
+            }
+        }
+    }
+
+    // 3. Fallback: check phone cookie against customer cache
+    $phoneCookie = normalizePhoneNumber($_COOKIE['mama_cust_phone'] ?? '');
+    if ($phoneCookie !== '') {
+        $profile = findCustomerProfile($phoneCookie);
+        if ($profile) {
+            $_SESSION['customer'] = $profile;
+            return $profile;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Clears customer session and auth cookies upon logout.
+ */
+function clearCustomerSession(): void
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+    unset($_SESSION['customer']);
+    unset($_SESSION['active_order']);
+
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+    @setcookie('mama_cust_auth', '', [
+        'expires' => time() - 3600,
+        'path' => '/',
+        'secure' => $isHttps,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    @setcookie('mama_cust_phone', '', [
+        'expires' => time() - 3600,
+        'path' => '/',
+        'secure' => $isHttps,
+        'httponly' => false,
+        'samesite' => 'Lax'
+    ]);
+    @setcookie('mama_active_order_token', '', [
+        'expires' => time() - 3600,
+        'path' => '/',
+        'secure' => $isHttps,
+        'httponly' => false,
+        'samesite' => 'Lax'
+    ]);
+}
+
+/**
+ * Sets active order token cookie for cross-container pass rendering.
+ */
+function setActiveOrderCookie(array $order): void
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+    $_SESSION['active_order'] = $order;
+
+    $token = (string)($order['orderId'] ?? '');
+    if ($token !== '') {
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+        @setcookie('mama_active_order_token', $token, [
+            'expires' => time() + 7200, // 2 hours
+            'path' => '/',
+            'secure' => $isHttps,
+            'httponly' => false,
+            'samesite' => 'Lax'
+        ]);
+    }
+}
+
+/**
+ * Gets active order across serverless containers.
+ */
+function getActiveOrder(?string $tokenHint = null): ?array
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+
+    if (!empty($_SESSION['active_order']) && is_array($_SESSION['active_order']) && !empty($_SESSION['active_order']['orderId'])) {
+        return $_SESSION['active_order'];
+    }
+
+    $token = strtoupper(trim((string)($tokenHint ?: ($_COOKIE['mama_active_order_token'] ?? ''))));
+    if ($token === '') {
+        return null;
+    }
+
+    // Lookup in orders cache
+    $projCache = dirname(__DIR__) . '/orders_cache.json';
+    $tempCache = sys_get_temp_dir() . '/mama_momo_orders.json';
+    foreach ([$projCache, $tempCache] as $file) {
+        if (file_exists($file)) {
+            $data = json_decode(@file_get_contents($file), true) ?: [];
+            if (isset($data[$token]) && is_array($data[$token])) {
+                $_SESSION['active_order'] = $data[$token];
+                return $data[$token];
+            }
+        }
+    }
+
+    return null;
 }
 
 /**

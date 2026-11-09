@@ -16,10 +16,10 @@ $menuUrl = ($basePath ?: '') . '/menu';
 $confirmUrl = ($basePath ?: '') . '/confirm';
 $homeUrl = ($basePath ?: '') . '/';
 
-$customer = $_SESSION['customer'] ?? null;
+$customer = getAuthenticatedCustomer();
 if (!$customer) {
     // If not logged in, redirect to login page
-    header('Location: ' . ($homeUrl ?: '/'), true, 303);
+    header('Location: ' . ($homeUrl ?: '/') . '?login_required=1', true, 303);
     exit;
 }
 ?>

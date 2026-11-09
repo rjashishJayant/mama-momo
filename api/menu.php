@@ -19,8 +19,8 @@ $checkoutUrl = ($basePath ?: '') . '/checkout';
 $menuUrl = ($basePath ?: '') . '/menu';
 $homeUrl = ($basePath ?: '') . '/';
 
-// Customer login enforcement: customer must be logged in via phone before ordering
-$customer = $_SESSION['customer'] ?? null;
+// Customer login enforcement: customer must be logged in via phone before ordering (supports stateless signed cookie for Vercel)
+$customer = getAuthenticatedCustomer();
 if (!$customer && !isset($_GET['format']) && !isset($_GET['action'])) {
     header('Location: ' . ($homeUrl ?: '/') . '?login_required=1', true, 303);
     exit;
