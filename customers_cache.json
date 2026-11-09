@@ -4,7 +4,7 @@
         "name": "Vikram Roy",
         "address": "",
         "currentVisits": 1,
-        "updatedAt": 1794212609,
+        "updatedAt": 1794214070,
         "createdAt": 1794212609
     },
     "8887776655": {
@@ -20,5 +20,30 @@
         "address": "",
         "updatedAt": 1794213528,
         "createdAt": 1794213475
+    },
+    "9199887766": {
+        "phone": "9199887766",
+        "name": "Priya Sharma",
+        "address": "",
+        "currentVisits": 1,
+        "updatedAt": 1794214166,
+        "createdAt": 1794214166
+    },
+    "9811122233": {
+        "phone": "9811122233",
+        "name": "Admin Direct User",
+        "address": "",
+        "currentVisits": 1,
+        "updatedAt": 1794214188,
+        "createdAt": 1794214188
+    },
+    "9988776655": {
+        "currentVisits": 0,
+        "remainingVisits": 5,
+        "phone": "9988776655",
+        "name": "Rahul Verma",
+        "address": "",
+        "updatedAt": 1794214260,
+        "createdAt": 1794214231
     }
 }
