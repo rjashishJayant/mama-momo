@@ -1,0 +1,24 @@
+{
+    "9822334455": {
+        "phone": "9822334455",
+        "name": "Vikram Roy",
+        "address": "",
+        "currentVisits": 1,
+        "updatedAt": 1794212609,
+        "createdAt": 1794212609
+    },
+    "8887776655": {
+        "phone": "8887776655",
+        "name": "Siddharth Roy",
+        "address": "Tower B, Flat 501",
+        "updatedAt": 1794213528,
+        "createdAt": 1794213475
+    },
+    "8887776656": {
+        "phone": "8887776656",
+        "name": "Meera Nair",
+        "address": "",
+        "updatedAt": 1794213528,
+        "createdAt": 1794213475
+    }
+}

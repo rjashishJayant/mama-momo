@@ -22,7 +22,7 @@ $homeUrl = ($basePath ?: '') . '/';
 // Customer login enforcement: customer must be logged in via phone before ordering
 $customer = $_SESSION['customer'] ?? null;
 if (!$customer && !isset($_GET['format']) && !isset($_GET['action'])) {
-    header('Location: ' . ($homeUrl ?: '/'), true, 303);
+    header('Location: ' . ($homeUrl ?: '/') . '?login_required=1', true, 303);
     exit;
 }
 

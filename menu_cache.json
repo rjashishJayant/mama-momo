@@ -1,0 +1,56 @@
+{
+    "updatedAt": 1794213456,
+    "updatedIso": "2026-11-09T08:37:36+00:00",
+    "items": {
+        "1": {
+            "id": "1",
+            "name": "Classic Steamed Veg Momo",
+            "price": 50,
+            "desc": "Fresh cabbage, paneer, and Himalayan herbs",
+            "category": "Steamed Veg",
+            "available": true,
+            "viewOnMenu": true,
+            "status": "published"
+        },
+        "2": {
+            "id": "2",
+            "name": "Crispy Fried Veg Momo",
+            "price": 60,
+            "desc": "Golden fried crunchy veg dumplings with spicy chutney",
+            "category": "Fried Veg",
+            "available": true,
+            "viewOnMenu": true,
+            "status": "published"
+        },
+        "3": {
+            "id": "3",
+            "name": "Finger \/ Fries",
+            "price": 20,
+            "desc": "crunchy potato fries",
+            "category": "Fried Veg",
+            "available": true,
+            "viewOnMenu": true,
+            "status": "published"
+        },
+        "4": {
+            "id": "4",
+            "name": "Veg Roll",
+            "price": 25,
+            "desc": "crunchy veg roll",
+            "category": "Rolls",
+            "available": true,
+            "viewOnMenu": true,
+            "status": "published"
+        },
+        "5": {
+            "id": "5",
+            "name": "Panner Roll",
+            "price": 40,
+            "desc": "Crunchy Paneer roll",
+            "category": "Rolls",
+            "available": true,
+            "viewOnMenu": true,
+            "status": "published"
+        }
+    }
+}

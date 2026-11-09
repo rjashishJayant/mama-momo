@@ -404,6 +404,12 @@ if ($customer && !empty($customer['phone'])) {
 
     <div id="errorBanner" class="error-banner"></div>
 
+    <?php if (isset($_GET['login_required']) && !$customer): ?>
+      <div style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:10px 14px; border-radius:10px; font-size:0.85rem; font-weight:600; margin-bottom:14px; text-align:center;">
+        🔒 Please enter your mobile number to view the menu and place your order.
+      </div>
+    <?php endif; ?>
+
     <?php if ($customer): ?>
       <!-- SCREEN: Logged In Customer Profile -->
       <div id="profileView">
@@ -586,7 +592,10 @@ if ($customer && !empty($customer['phone'])) {
 
         if (data && data.success) {
           if (data.exists) {
-            // Customer found and session set! Refresh page to render profile
+            // Customer found and session set! Save to localStorage and refresh page
+            try {
+              localStorage.setItem('mama_customer', JSON.stringify(data.profile));
+            } catch (_) {}
             window.location.reload();
           } else {
             // Customer does not exist -> show registration form
@@ -661,6 +670,14 @@ if ($customer && !empty($customer['phone'])) {
     <?php if ($customer): ?>
       try {
         localStorage.setItem('mama_customer', <?= json_encode($customer, JSON_UNESCAPED_UNICODE) ?>);
+      } catch (_) {}
+    <?php else: ?>
+      // Auto-prefill phone from localStorage if customer had logged in previously
+      try {
+        const saved = JSON.parse(localStorage.getItem('mama_customer') || 'null');
+        if (saved && saved.phone && loginPhone && !loginPhone.value && !window.location.search.includes('action=logout')) {
+          loginPhone.value = saved.phone;
+        }
       } catch (_) {}
     <?php endif; ?>
   </script>

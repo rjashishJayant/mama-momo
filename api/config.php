@@ -24,7 +24,7 @@ $DEFAULT_MENU_ITEMS = [
     '1' => [
         'id' => '1',
         'name' => 'Classic Steamed Veg Momo',
-        'price' => 80.0,
+        'price' => 50.0,
         'desc' => 'Fresh cabbage, paneer, and Himalayan herbs',
         'category' => 'Steamed Veg',
         'available' => true,
@@ -33,19 +33,19 @@ $DEFAULT_MENU_ITEMS = [
     ],
     '2' => [
         'id' => '2',
-        'name' => 'Steamed Chicken Momo',
-        'price' => 120.0,
-        'desc' => 'Juicy minced chicken infused with mild spices',
-        'category' => 'Steamed Non-Veg',
+        'name' => 'Crispy Fried Veg Momo',
+        'price' => 60.0,
+        'desc' => 'Golden fried crunchy veg dumplings with spicy chutney',
+        'category' => 'Fried Veg',
         'available' => true,
         'viewOnMenu' => true,
         'status' => 'published'
     ],
     '3' => [
         'id' => '3',
-        'name' => 'Crispy Fried Veg Momo',
-        'price' => 100.0,
-        'desc' => 'Golden fried crunchy veg dumplings with spicy chutney',
+        'name' => 'Finger / Fries',
+        'price' => 20.0,
+        'desc' => 'crunchy potato fries',
         'category' => 'Fried Veg',
         'available' => true,
         'viewOnMenu' => true,
@@ -53,20 +53,20 @@ $DEFAULT_MENU_ITEMS = [
     ],
     '4' => [
         'id' => '4',
-        'name' => 'Crispy Fried Chicken Momo',
-        'price' => 140.0,
-        'desc' => 'Deep fried crisp chicken momos served hot',
-        'category' => 'Fried Non-Veg',
+        'name' => 'Veg Roll',
+        'price' => 25.0,
+        'desc' => 'crunchy veg roll',
+        'category' => 'Rolls',
         'available' => true,
         'viewOnMenu' => true,
         'status' => 'published'
     ],
     '5' => [
         'id' => '5',
-        'name' => 'Jhol Momo Soup Bowl',
-        'price' => 130.0,
-        'desc' => 'Steamed momos dipped in spicy sesame-tomato jhol broth',
-        'category' => 'Specialties',
+        'name' => 'Panner Roll',
+        'price' => 40.0,
+        'desc' => 'Crunchy Paneer roll',
+        'category' => 'Rolls',
         'available' => true,
         'viewOnMenu' => true,
         'status' => 'published'
@@ -119,8 +119,8 @@ function getDynamicMenu(bool $forceRefresh = false, ?array &$meta = null): array
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_CONNECTTIMEOUT => 4,
-        CURLOPT_TIMEOUT => 6
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 14
     ]);
     $rawResponse = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -200,7 +200,20 @@ function getDynamicMenu(bool $forceRefresh = false, ?array &$meta = null): array
         }
     }
 
-    // 4. Ultimate fallback: Return standard default momo catalogue
+    // 4. Ultimate fallback: Return standard default momo catalogue & auto-seed empty cache
+    $fallbackCache = json_encode([
+        'updatedAt' => $now,
+        'updatedIso' => date('c', $now),
+        'items' => $DEFAULT_MENU_ITEMS
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+    if (!file_exists($projCache) || filesize($projCache) === 0) {
+        @file_put_contents($projCache, $fallbackCache);
+    }
+    if (!file_exists($tempCache) || filesize($tempCache) === 0) {
+        @file_put_contents($tempCache, $fallbackCache);
+    }
+
     $meta = [
         'source' => 'default_fallback',
         'age' => 0,
